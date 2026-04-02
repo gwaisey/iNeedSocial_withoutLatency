@@ -17,10 +17,12 @@ export function FeedPage() {
   const [payload, setPayload] = useState<FeedPayload | null>(null)
   const [heroIndex, setHeroIndex] = useState(0)
   const [showTutorial, setShowTutorial] = useState(false)
+  const [showTimer, setShowTimer] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   const {
     commentSheet,
+    feedStartedAt,
     likedPosts,
     repostedPosts,
     closeCommentSheet,
@@ -68,6 +70,12 @@ export function FeedPage() {
     )
     return () => window.clearInterval(id)
   }, [isDark, payload])
+
+  useEffect(() => {
+  const handler = () => setShowTimer(true)
+  window.addEventListener("timeropen", handler)
+  return () => window.removeEventListener("timeropen", handler)
+}, [])
 
   const handleThemeToggle = () =>
     setSearchParams({ theme: isDark ? "light" : "dark" })
@@ -166,7 +174,7 @@ export function FeedPage() {
                   bg-white shadow-[0_8px_24px_rgba(18,17,25,0.16)]
                   active:scale-95 transition-transform
                 "
-                onClick={() => navigate("/timer")}
+                onClick={() => setShowTimer(true)}
                 type="button"
               >
                 <BrandLogo color="#27262F" width={32} />
@@ -189,12 +197,52 @@ export function FeedPage() {
           bg-white shadow-[0_8px_28px_rgba(18,17,25,0.22)]
           active:scale-90 transition-transform
         "
-        onClick={() => navigate("/timer")}
+        onClick={() => setShowTimer(true)}
         style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
         type="button"
       >
         <BrandLogo color="#27262F" width={30} />
       </button>
+      
+      {/* ── Timer overlay ── */}
+      {showTimer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 backdrop-blur-sm animate-fade-in">
+          <div className="flex flex-col items-center gap-4 text-white text-center px-6">
+            <BrandLogo color="#FFFFFF" width={48} />
+            <div>
+              <p className="text-base font-bold tracking-wide mb-3">Time You've Spent</p>
+              <p className="text-[clamp(2.5rem,12vw,4rem)] font-bold tabular-nums leading-none whitespace-nowrap">
+                {formatElapsed(feedStartedAt)}
+              </p>
+              <div className="mt-3 flex justify-between px-2 text-xs font-bold uppercase tracking-[0.2em] text-white/60">
+                <span>jam</span>
+                <span>mnt</span>
+                <span>dtk</span>
+              </div>
+            </div>
+            <p className="text-sm font-semibold text-[#FF516B] max-w-[260px] leading-relaxed">
+              Don't forget to screenshot this page and submit to our post-questionnaire!
+            </p>
+            <div className="flex gap-4 mt-2">
+              <button
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white active:scale-95 transition-transform"
+                onClick={() => setShowTimer(false)}
+                type="button"
+              >
+                ✕
+              </button>
+              <button
+                aria-label="Continue to thank-you screen"
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg active:scale-95 transition-transform"
+                onClick={() => navigate("/thank-you")}
+                type="button"
+              >
+                <BrandLogo color="#27262F" width={28} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Overlays ── */}
       {commentSheet && <CommentSheet onClose={closeCommentSheet} />}
@@ -277,4 +325,13 @@ function RevealPost({
       {revealed ? children : <SinglePostSkeleton isDark={isDark} />}
     </div>
   )
+}
+
+function formatElapsed(feedStartedAt: number | null): string {
+  const ms = feedStartedAt === null ? 0 : Date.now() - feedStartedAt
+  const totalSec = Math.floor(ms / 1000)
+  const hours   = String(Math.floor(totalSec / 3600)).padStart(2, "0")
+  const minutes = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0")
+  const seconds = String(totalSec % 60).padStart(2, "0")
+  return `${hours} : ${minutes} : ${seconds}`
 }

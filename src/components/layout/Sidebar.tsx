@@ -9,7 +9,6 @@ interface SidebarProps {
 
 const navItems = [
   { to: "/feed", icon: Home, label: "Beranda" },
-  { to: "/timer", icon: Timer, label: "Timer" },
 ]
 
 export function Sidebar({ theme }: SidebarProps) {
@@ -47,6 +46,15 @@ export function Sidebar({ theme }: SidebarProps) {
             <span>{label}</span>
           </NavLink>
         ))}
+        
+        {/* Timer button */}
+        <button
+          onClick={() => window.dispatchEvent(new Event("timeropen"))}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${textColor} ${hoverBg}`}
+        >
+          <Timer size={20} strokeWidth={1.8} />
+          <span>Timer</span>
+        </button>
       </nav>
 
       {/* Profile & logout */}
