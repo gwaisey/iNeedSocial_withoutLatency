@@ -15,6 +15,7 @@ export type Post = {
   likes: string
   caption: string
   media: MediaItem[]
+  genre?: string
 }
 
 export type HeroSlide = {
