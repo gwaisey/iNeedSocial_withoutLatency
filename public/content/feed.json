@@ -1,21 +1,4 @@
 {
-  "heroSlides": [
-    {
-      "id": "hero-1",
-      "src": "/content/files/cafe_desserts.jpg",
-      "alt": "Cafe dessert table"
-    },
-    {
-      "id": "hero-2",
-      "src": "/content/files/books.jpg",
-      "alt": "Studio Ghibli records"
-    },
-    {
-      "id": "hero-3",
-      "src": "/content/files/sheetmask-party.jpg",
-      "alt": "Friends wearing cartoon face masks"
-    }
-  ],
   "posts": [
     {
       "id": "post-snoopy",

@@ -17,22 +17,14 @@ export function WelcomePage() {
           <h1 className="text-4xl font-medium leading-tight">Selamat Datang!</h1>
           <p className="text-2xl italic">
             <span className="font-light">Siap untuk&nbsp;</span>
-            <span className="font-semibold">Scrolling?</span>
-          </p>
-        </div>
-
-        <div className="relative mt-6 space-y-1 text-haze">
-          <p className="text-xl font-semibold italic">Welcome!</p>
-          <p className="text-lg italic">
-            <span className="font-light">Are you ready to&nbsp;</span>
-            <span className="font-semibold">Scroll?</span>
+            <span className="font-semibold">menjelajah feed?</span>
           </p>
         </div>
 
         {/* CTA */}
         <div className="relative mt-12 flex justify-end">
           <button
-            aria-label="Continue to feed"
+            aria-label="Lanjut ke feed"
             className="
               flex h-14 w-14 items-center justify-center
               rounded-full bg-ink text-white

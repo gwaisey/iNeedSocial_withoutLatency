@@ -10,12 +10,10 @@ import {
 
 type StudyContextValue = {
   commentSheet: string | null
-  feedStartedAt: number | null
   likedPosts: Record<string, boolean>
   repostedPosts: Record<string, boolean>
   closeCommentSheet: () => void
   openCommentSheet: (postId: string) => void
-  startFeedTimer: () => void
   toggleLiked: (postId: string) => void
   toggleReposted: (postId: string) => void
 }
@@ -50,9 +48,7 @@ export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
     () => readStorage(STORAGE_KEY_REPOSTED)
   )
   const [commentSheet, setCommentSheet] = useState<string | null>(null)
-  const [feedStartedAt, setFeedStartedAt] = useState<number | null>(null)
 
-  // Persist liked/reposted state across page refreshes
   useEffect(() => {
     writeStorage(STORAGE_KEY_LIKED, likedPosts)
   }, [likedPosts])
@@ -72,24 +68,17 @@ export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
   const closeCommentSheet = useCallback(() => setCommentSheet(null), [])
   const openCommentSheet = useCallback((postId: string) => setCommentSheet(postId), [])
 
-  // Record the moment user first enters the feed — called once, idempotent
-  const startFeedTimer = useCallback(() => {
-    setFeedStartedAt((prev) => prev ?? Date.now())
-  }, [])
-
   const value = useMemo(
     () => ({
       commentSheet,
-      feedStartedAt,
       likedPosts,
       repostedPosts,
       closeCommentSheet,
       openCommentSheet,
-      startFeedTimer,
       toggleLiked,
       toggleReposted,
     }),
-    [commentSheet, feedStartedAt, likedPosts, repostedPosts, closeCommentSheet, openCommentSheet, startFeedTimer, toggleLiked, toggleReposted]
+    [commentSheet, likedPosts, repostedPosts, closeCommentSheet, openCommentSheet, toggleLiked, toggleReposted]
   )
 
   return (

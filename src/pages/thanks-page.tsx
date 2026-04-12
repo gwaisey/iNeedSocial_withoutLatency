@@ -10,13 +10,13 @@ export function ThanksPage() {
         {/* Content */}
         <div className="relative space-y-2">
           <h1 className="text-4xl font-medium leading-tight">Terima Kasih!</h1>
-          <p className="text-xl font-semibold italic text-haze">Thank You!</p>
+          <p className="text-xl font-semibold italic text-haze">Sesi selesai.</p>
         </div>
 
         <p className="relative mt-6 text-base text-haze leading-relaxed">
-          Terima kasih telah mengikuti simulasi ini, partisipasi Anda sangat berarti bagi penelitian kami. Silahkan keluar dari website ini.
+          Terima kasih telah mengikuti simulasi ini. Partisipasi Anda sangat berarti bagi penelitian kami.
           <br /><br />
-          <span className="italic">Thank you for being a part of this simulation, your participation means a lot to our research. You may now exit this website.</span>
+          Anda sekarang dapat keluar dari situs ini.
         </p>
       </div>
     </div>
