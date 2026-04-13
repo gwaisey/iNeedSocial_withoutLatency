@@ -29,10 +29,13 @@ Lokal admin
 File utama:
 
 - `src/App.tsx` mendefinisikan route dan mempertahankan `/timer` sebagai redirect ke `/feed`.
-- `src/pages/feed-page.tsx` menangani logika sesi penelitian, overlay durasi, status loading, dan pemulihan posisi scroll saat ganti tema.
-- `src/services/feed-service.ts` memuat serta menormalisasi data feed.
+- `src/pages/feed-page.tsx` mengorkestrasi layout feed, status loading, tutorial, dan pemulihan posisi scroll saat ganti tema.
+- `src/hooks/use-feed-session.ts` menangani atribusi waktu per post, finalisasi sesi, serta penyimpanan dan ekspor laporan peserta.
+- `src/components/timer-summary-overlay.tsx` merender overlay ringkasan durasi yang dipakai ulang dari snapshot sesi final.
+- `src/services/feed-service.ts` memilih sumber data feed berdasarkan env lalu memuat serta menormalisasi data feed.
 - `src/services/supabase.ts` memvalidasi konfigurasi Supabase frontend, menyimpan satu ringkasan sesi, dan me-load `xlsx` secara lazy untuk ekspor per pengguna.
 - `scripts/export-all-sessions.mjs` adalah jalur ekspor admin lokal untuk seluruh data sesi menggunakan service-role key privat.
+- `src/context/study-context.tsx` menyimpan state komentar, suka, dan repost dengan namespace berbasis sesi studi.
 - `src/types/social.ts` berisi tipe feed, genre, dan payload sesi.
 
 ## Routing
@@ -51,6 +54,13 @@ Timer bukan halaman terpisah. Tombol di sidebar desktop dan CTA mobile sama-sama
 ## Model Data Feed
 
 Feed service menormalisasi semua post ke model internal yang ketat sebelum dipakai UI.
+
+Sumber data feed dikontrol oleh `VITE_FEED_SOURCE`:
+
+- `mock` memuat `public/content/feed.json`
+- `api` memanggil `/api/feed?theme=...`
+
+Nilai selain `api` dianggap `mock`.
 
 ### Tema
 
@@ -88,6 +98,15 @@ Perilaku penting:
 
 Overlay membekukan durasi total dan rincian kategori berdasarkan snapshot final sesi tersebut.
 
+## State Interaksi Peserta
+
+Interaksi feed ringan disimpan terpisah dari payload durasi sesi:
+
+- suka dan repost disimpan di `sessionStorage`,
+- namespace penyimpanan dibuat ulang saat sesi baru dimulai dari halaman sambutan,
+- refresh pada tab yang sama tetap mempertahankan state sesi aktif,
+- sesi baru tidak mewarisi suka/repost dari sesi peserta sebelumnya.
+
 ## Perilaku Media
 
 `FeedPost` bertanggung jawab atas render konten media.
@@ -114,7 +133,8 @@ Pemuatan feed eksplisit:
 
 - tampilkan skeleton saat loading,
 - tampilkan state retry inline jika pemuatan gagal,
-- retry tanpa memuat ulang seluruh aplikasi.
+- retry tanpa memuat ulang seluruh aplikasi,
+- log error mentah ke `console.error` sambil tetap menampilkan pesan fallback yang aman untuk peserta.
 
 Penyimpanan Supabase frontend juga eksplisit:
 
@@ -152,3 +172,18 @@ Artefak hasil generate bukan bagian dari source:
 - output Vite hasil generate
 
 Konfigurasi Vite TypeScript di `vite.config.ts` tetap menjadi sumber kebenaran tunggal.
+
+## Quality Gates
+
+Repo menyediakan quality gate minimum berikut:
+
+- `npm run build`
+- `npm run lint`
+- `npm run test`
+
+Pengujian saat ini berfokus pada:
+
+- pemilihan sumber feed dan normalisasi payload,
+- alokasi pembulatan durasi kategori,
+- namespace storage berbasis sesi,
+- fallback error yang aman untuk UI.

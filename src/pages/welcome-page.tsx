@@ -1,8 +1,10 @@
 import { ChevronRight } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { useStudyState } from "../context/study-context"
 
 export function WelcomePage() {
   const navigate = useNavigate()
+  const { startStudySession } = useStudyState()
 
   return (
     <div className="min-h-svh flex items-center justify-center bg-app-radial p-6 animate-fade-in">
@@ -32,7 +34,10 @@ export function WelcomePage() {
               hover:bg-dusk transition-colors
               active:scale-95
             "
-            onClick={() => navigate("/feed?theme=light")}
+            onClick={() => {
+              startStudySession()
+              navigate("/feed?theme=light")
+            }}
             type="button"
           >
             <ChevronRight size={24} strokeWidth={2.2} />

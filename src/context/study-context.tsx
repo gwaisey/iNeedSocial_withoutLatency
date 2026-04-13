@@ -7,6 +7,13 @@ import {
   useMemo,
   useState,
 } from "react"
+import {
+  ensureStudySession,
+  getSessionStorage,
+  readInteractionState,
+  startNewStudySession,
+  writeInteractionState,
+} from "./study-session-storage"
 
 type StudyContextValue = {
   commentSheet: string | null
@@ -14,48 +21,30 @@ type StudyContextValue = {
   repostedPosts: Record<string, boolean>
   closeCommentSheet: () => void
   openCommentSheet: (postId: string) => void
+  startStudySession: () => void
   toggleLiked: (postId: string) => void
   toggleReposted: (postId: string) => void
 }
 
 const StudyContext = createContext<StudyContextValue | null>(null)
 
-const STORAGE_KEY_LIKED = "gaby:liked"
-const STORAGE_KEY_REPOSTED = "gaby:reposted"
-
-function readStorage(key: string): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
-  } catch {
-    return {}
-  }
-}
-
-function writeStorage(key: string, value: Record<string, boolean>) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Storage might be unavailable in private mode
-  }
-}
-
 export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
+  const [sessionId, setSessionId] = useState(() => ensureStudySession(getSessionStorage()))
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>(
-    () => readStorage(STORAGE_KEY_LIKED)
+    () => readInteractionState(getSessionStorage(), sessionId, "liked")
   )
   const [repostedPosts, setRepostedPosts] = useState<Record<string, boolean>>(
-    () => readStorage(STORAGE_KEY_REPOSTED)
+    () => readInteractionState(getSessionStorage(), sessionId, "reposted")
   )
   const [commentSheet, setCommentSheet] = useState<string | null>(null)
 
   useEffect(() => {
-    writeStorage(STORAGE_KEY_LIKED, likedPosts)
-  }, [likedPosts])
+    writeInteractionState(getSessionStorage(), sessionId, "liked", likedPosts)
+  }, [likedPosts, sessionId])
 
   useEffect(() => {
-    writeStorage(STORAGE_KEY_REPOSTED, repostedPosts)
-  }, [repostedPosts])
+    writeInteractionState(getSessionStorage(), sessionId, "reposted", repostedPosts)
+  }, [repostedPosts, sessionId])
 
   const toggleLiked = useCallback((postId: string) => {
     setLikedPosts((curr) => ({ ...curr, [postId]: !curr[postId] }))
@@ -67,6 +56,13 @@ export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const closeCommentSheet = useCallback(() => setCommentSheet(null), [])
   const openCommentSheet = useCallback((postId: string) => setCommentSheet(postId), [])
+  const startStudySession = useCallback(() => {
+    const nextSessionId = startNewStudySession(getSessionStorage())
+    setSessionId(nextSessionId)
+    setLikedPosts({})
+    setRepostedPosts({})
+    setCommentSheet(null)
+  }, [])
 
   const value = useMemo(
     () => ({
@@ -75,10 +71,20 @@ export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
       repostedPosts,
       closeCommentSheet,
       openCommentSheet,
+      startStudySession,
       toggleLiked,
       toggleReposted,
     }),
-    [commentSheet, likedPosts, repostedPosts, closeCommentSheet, openCommentSheet, toggleLiked, toggleReposted]
+    [
+      commentSheet,
+      likedPosts,
+      repostedPosts,
+      closeCommentSheet,
+      openCommentSheet,
+      startStudySession,
+      toggleLiked,
+      toggleReposted,
+    ]
   )
 
   return (

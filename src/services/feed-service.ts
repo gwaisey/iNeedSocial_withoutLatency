@@ -7,13 +7,18 @@ import {
 } from "../types/social"
 
 const BASE_URL = ""
-const USE_MOCK = true
 const VALID_GENRES = new Set<GenreKey>(GENRE_KEYS)
+
+export type FeedSource = "mock" | "api"
 
 type RawPost = Omit<Post, "genre"> & { genre?: string | null }
 
 type RawFeedPayload = {
   posts?: RawPost[]
+}
+
+export function resolveFeedSource(value: string | undefined): FeedSource {
+  return value === "api" ? "api" : "mock"
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -33,7 +38,7 @@ function normalizeGenre(genre?: string | null): GenreKey {
   return VALID_GENRES.has(genre as GenreKey) ? (genre as GenreKey) : "humor"
 }
 
-function normalizeFeedPayload(theme: ThemeMode, payload: RawFeedPayload): FeedPayload {
+export function normalizeFeedPayload(theme: ThemeMode, payload: RawFeedPayload): FeedPayload {
   return {
     theme,
     posts: Array.isArray(payload.posts)
@@ -57,6 +62,7 @@ async function realGetFeed(theme: ThemeMode): Promise<FeedPayload> {
 
 export const socialFeedService = {
   getFeedByTheme(theme: ThemeMode): Promise<FeedPayload> {
-    return USE_MOCK ? mockGetFeed(theme) : realGetFeed(theme)
+    const feedSource = resolveFeedSource(import.meta.env.VITE_FEED_SOURCE)
+    return feedSource === "api" ? realGetFeed(theme) : mockGetFeed(theme)
   },
 }

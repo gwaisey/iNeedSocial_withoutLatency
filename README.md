@@ -38,6 +38,18 @@ Build produksi:
 npm run build
 ```
 
+Lint:
+
+```bash
+npm run lint
+```
+
+Menjalankan pengujian unit dan komponen:
+
+```bash
+npm run test
+```
+
 Pratinjau hasil build:
 
 ```bash
@@ -51,9 +63,17 @@ Salin `.env.example` menjadi `.env`, lalu isi sesuai kebutuhan.
 ### Variabel frontend untuk aplikasi peserta
 
 ```bash
+VITE_FEED_SOURCE=mock
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
+
+`VITE_FEED_SOURCE` mendukung dua nilai:
+
+- `mock` untuk memuat `public/content/feed.json`
+- `api` untuk memanggil `/api/feed?theme=...`
+
+Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`.
 
 Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Overlay durasi hanya akan menampilkan pesan non-blocking, dan peserta tetap dapat mengunduh laporan sesinya sendiri secara lokal.
 
@@ -107,6 +127,13 @@ Setiap post dinormalisasi ke salah satu kategori penelitian berikut:
 
 Aliran post yang sama digunakan untuk mode terang dan gelap. Konten stimulus penelitian di `public/content/feed.json` dipertahankan apa adanya.
 
+## Perilaku Interaksi Peserta
+
+- Status suka dan repost sekarang disimpan di `sessionStorage`, bukan `localStorage`.
+- Refresh pada tab yang sama tetap mempertahankan interaksi selama sesi studi yang sama.
+- Memulai sesi baru dari halaman sambutan akan membuat namespace sesi baru dan menghapus interaksi sesi sebelumnya.
+- Membuka ulang overlay durasi di sesi yang sama tidak mereset interaksi peserta.
+
 ## Penyimpanan Sesi dan Ekspor
 
 - Aplikasi peserta menyimpan satu ringkasan sesi ke Supabase untuk setiap sesi studi.
@@ -157,4 +184,6 @@ scripts/
 - Jika pemuatan feed gagal, aplikasi menampilkan state retry di dalam halaman.
 - Waktu feed dialokasikan terus-menerus ke post dominan yang terlihat, sehingga timer utama selaras dengan total kategori.
 - Video hanya autoplay saat terlihat, dan video di carousel hanya autoplay pada slide aktif.
-- Output build di `dist/` adalah artefak hasil generate dan tidak perlu di-commit.
+- Error runtime yang aman untuk pengguna tetap ditampilkan secara lokal, sementara error mentah dicatat ke `console.error` untuk debugging.
+- Output build di `dist/`, file `.env`, log lokal Vite, `*.tsbuildinfo`, dan output config hasil generate tidak boleh dilacak di git.
+- Jika file-file terabaikan tersebut pernah ter-commit, bersihkan index git saat ini dan rewrite history repo agar artefak serta secret lama benar-benar terhapus.
