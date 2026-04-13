@@ -1,23 +1,11 @@
 import { ChevronRight, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
-
-const STORAGE_KEY = "gaby:tutorial_v1"
-
-export function isTutorialDone(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === "1"
-  } catch {
-    return false
-  }
-}
-
-function markDone() {
-  try {
-    localStorage.setItem(STORAGE_KEY, "1")
-  } catch {
-    // Ignore storage errors in restricted/private environments.
-  }
-}
+import {
+  getSessionStorage,
+  readTutorialState,
+  writeTutorialState,
+} from "../../context/study-session-storage"
+import { useStudyState } from "../../context/study-context"
 
 type Side = "above" | "below"
 
@@ -74,7 +62,8 @@ interface TutorialOverlayProps {
 }
 
 export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
-  const [idx, setIdx] = useState(0)
+  const { sessionId } = useStudyState()
+  const [idx, setIdx] = useState(() => readTutorialState(getSessionStorage(), sessionId).currentStep)
   const [spot, setSpot] = useState<SpotRect | null>(null)
   const [winH, setWinH] = useState(window.innerHeight)
 
@@ -82,6 +71,13 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
   const isLast = idx === STEPS.length - 1
   const pad = 12
   const gap = 14
+
+  useEffect(() => {
+    writeTutorialState(getSessionStorage(), sessionId, {
+      completed: false,
+      currentStep: idx,
+    })
+  }, [idx, sessionId])
 
   useEffect(() => {
     if (!step.selector) {
@@ -106,18 +102,24 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
 
   const handleNext = useCallback(() => {
     if (isLast) {
-      markDone()
+      writeTutorialState(getSessionStorage(), sessionId, {
+        completed: true,
+        currentStep: idx,
+      })
       onDone()
       return
     }
 
     setIdx((current) => current + 1)
-  }, [isLast, onDone])
+  }, [idx, isLast, onDone, sessionId])
 
   const handleSkip = useCallback(() => {
-    markDone()
+    writeTutorialState(getSessionStorage(), sessionId, {
+      completed: true,
+      currentStep: idx,
+    })
     onDone()
-  }, [onDone])
+  }, [idx, onDone, sessionId])
 
   let tooltipTop: number | undefined
   let tooltipBottom: number | undefined
@@ -163,6 +165,7 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
               {!isLast && (
                 <button
                   className="text-sm font-medium text-haze active:opacity-60"
+                  data-testid="tutorial-skip-button"
                   onClick={handleSkip}
                   type="button"
                 >
@@ -171,6 +174,7 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
               )}
               <button
                 className="flex items-center gap-2 rounded-full bg-violet px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(119,109,255,0.45)] active:scale-95 transition-transform"
+                data-testid="tutorial-next-button"
                 onClick={handleNext}
                 type="button"
               >
@@ -196,6 +200,7 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
             <button
               aria-label="Lewati tutorial"
               className="absolute right-3 top-3 rounded-full p-1.5 text-haze/60 transition-colors hover:bg-ink/5"
+              data-testid="tutorial-skip-button"
               onClick={handleSkip}
               type="button"
             >
@@ -214,6 +219,7 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
               <Dots />
               <button
                 className="flex items-center gap-1.5 rounded-full bg-violet px-4 py-2 text-xs font-bold text-white shadow-[0_4px_12px_rgba(119,109,255,0.4)] active:scale-95 transition-transform"
+                data-testid="tutorial-next-button"
                 onClick={handleNext}
                 type="button"
               >

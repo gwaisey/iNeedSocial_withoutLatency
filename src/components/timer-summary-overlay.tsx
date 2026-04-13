@@ -35,7 +35,10 @@ export function TimerSummaryOverlay({
         <BrandLogo color="#FFFFFF" width={48} />
         <div>
           <p className="mb-3 text-base font-bold tracking-wide">Waktu yang Anda Habiskan</p>
-          <p className="whitespace-nowrap text-[clamp(2.5rem,12vw,4rem)] font-bold leading-none tabular-nums">
+          <p
+            className="whitespace-nowrap text-[clamp(2.5rem,12vw,4rem)] font-bold leading-none tabular-nums"
+            data-testid="timer-value"
+          >
             {formatElapsed(displayedElapsedMs)}
           </p>
           <div className="mt-3 flex justify-between px-2 text-xs font-bold uppercase tracking-[0.2em] text-white/60">
@@ -83,6 +86,7 @@ export function TimerSummaryOverlay({
           <button
             aria-label="Lanjut ke halaman terima kasih"
             className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg transition-transform active:scale-95"
+            data-testid="finish-session-button"
             onClick={onFinish}
             type="button"
           >
@@ -93,6 +97,7 @@ export function TimerSummaryOverlay({
         <div className="mt-4 flex w-full flex-col gap-2">
           <button
             className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 font-bold text-ink shadow-md transition-transform active:scale-95 disabled:opacity-70"
+            data-testid="download-report-button"
             disabled={isSavingSession}
             onClick={onDownload}
             type="button"

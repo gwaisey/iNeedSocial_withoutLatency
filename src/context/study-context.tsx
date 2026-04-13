@@ -19,6 +19,7 @@ type StudyContextValue = {
   commentSheet: string | null
   likedPosts: Record<string, boolean>
   repostedPosts: Record<string, boolean>
+  sessionId: string
   closeCommentSheet: () => void
   openCommentSheet: (postId: string) => void
   startStudySession: () => void
@@ -69,6 +70,7 @@ export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
       commentSheet,
       likedPosts,
       repostedPosts,
+      sessionId,
       closeCommentSheet,
       openCommentSheet,
       startStudySession,
@@ -79,6 +81,7 @@ export function StudyProvider({ children }: Readonly<{ children: ReactNode }>) {
       commentSheet,
       likedPosts,
       repostedPosts,
+      sessionId,
       closeCommentSheet,
       openCommentSheet,
       startStudySession,

@@ -1,7 +1,17 @@
-import { describe, expect, it } from "vitest"
-import { normalizeFeedPayload, resolveFeedSource } from "./feed-service"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  normalizeFeedPayload,
+  resolveFeedSource,
+  validateFeedPayload,
+} from "./feed-service"
 
 describe("feed-service helpers", () => {
+  const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+  afterEach(() => {
+    consoleErrorSpy.mockClear()
+  })
+
   it("defaults feed source to mock unless explicitly set to api", () => {
     expect(resolveFeedSource(undefined)).toBe("mock")
     expect(resolveFeedSource("mock")).toBe("mock")
@@ -25,5 +35,15 @@ describe("feed-service helpers", () => {
     })
 
     expect(payload.posts[0]?.genre).toBe("humor")
+  })
+
+  it("throws a localized validation error for malformed feed payloads", () => {
+    expect(() => validateFeedPayload({ posts: [{ id: "post-1" }] })).toThrow(
+      "Format feed tidak valid."
+    )
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[feed-service:validation]",
+      expect.anything()
+    )
   })
 })

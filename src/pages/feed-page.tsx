@@ -7,8 +7,9 @@ import { RightPanel } from "../components/layout/RightPanel"
 import { Sidebar } from "../components/layout/Sidebar"
 import { TimerSummaryOverlay } from "../components/timer-summary-overlay"
 import { ThemeToggle } from "../components/theme-toggle"
-import { isTutorialDone, TutorialOverlay } from "../components/tutorial/TutorialOverlay"
+import { TutorialOverlay } from "../components/tutorial/TutorialOverlay"
 import { useStudyState } from "../context/study-context"
+import { getSessionStorage, readTutorialState } from "../context/study-session-storage"
 import { useFeedSession } from "../hooks/use-feed-session"
 import { socialFeedService } from "../services/feed-service"
 import { getUserFacingErrorMessage } from "../utils/error-utils"
@@ -30,7 +31,6 @@ export function FeedPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [payload, setPayload] = useState<FeedPayload | null>(null)
   const [showTutorial, setShowTutorial] = useState(false)
-  const [showTimer, setShowTimer] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [feedError, setFeedError] = useState<string | null>(null)
   const [feedRequestKey, setFeedRequestKey] = useState(0)
@@ -43,6 +43,7 @@ export function FeedPage() {
     commentSheet,
     likedPosts,
     repostedPosts,
+    sessionId,
     closeCommentSheet,
     openCommentSheet,
     toggleLiked,
@@ -53,13 +54,15 @@ export function FeedPage() {
     searchParams.get("theme") === "dark" ? "dark" : "light"
   const isDark = themeMode === "dark"
   const {
-    commitActivePostDuration,
+    closeTimerOverlay,
     downloadReport,
     finalReport,
     finalizedGenreTimes,
     genreTimes,
     isSavingSession,
+    isTimerOpen,
     openTimer,
+    persistSessionSnapshot,
     scheduleActivePostEvaluation,
     submissionHasError,
     submissionMessage,
@@ -68,6 +71,7 @@ export function FeedPage() {
     headerRef,
     posts: payload?.posts ?? null,
     scrollRef,
+    studySessionId: sessionId,
   })
 
   const captureScrollAnchor = useCallback((): ScrollAnchor | null => {
@@ -102,7 +106,6 @@ export function FeedPage() {
   }, [])
 
   const handleOpenTimer = useCallback(async () => {
-    setShowTimer(true)
     await openTimer()
   }, [openTimer])
 
@@ -148,18 +151,19 @@ export function FeedPage() {
   }, [feedRequestKey, themeMode])
 
   useEffect(() => {
-    if (!payload || isTutorialDone()) {
+    if (!payload) {
+      return
+    }
+
+    const tutorialState = readTutorialState(getSessionStorage(), sessionId)
+    if (tutorialState.completed) {
+      setShowTutorial(false)
       return
     }
 
     const timeoutId = window.setTimeout(() => setShowTutorial(true), 350)
     return () => window.clearTimeout(timeoutId)
-  }, [payload])
-
-  useEffect(() => {
-    commitActivePostDuration()
-    closeCommentSheet()
-  }, [closeCommentSheet, commitActivePostDuration, themeMode])
+  }, [payload, sessionId])
 
   useLayoutEffect(() => {
     const anchor = pendingScrollAnchorRef.current
@@ -200,7 +204,10 @@ export function FeedPage() {
 
   const handleThemeToggle = () => {
     pendingScrollAnchorRef.current = captureScrollAnchor()
-    commitActivePostDuration()
+    persistSessionSnapshot({
+      commitActivePost: true,
+      isTimerOpen,
+    })
     closeCommentSheet()
     setSearchParams({ theme: isDark ? "light" : "dark" })
   }
@@ -282,6 +289,7 @@ export function FeedPage() {
               </p>
               <button
                 aria-label="Buka ringkasan waktu"
+                data-testid="timer-open-button"
                 className="
                   flex h-14 w-14 items-center justify-center rounded-full
                   bg-white shadow-[0_8px_24px_rgba(18,17,25,0.16)]
@@ -303,6 +311,7 @@ export function FeedPage() {
 
       <button
         aria-label="Lihat ringkasan waktu"
+        data-testid="timer-open-button-mobile"
         className="
           md:hidden fixed left-1/2 -translate-x-1/2 z-50
           flex h-14 w-14 items-center justify-center rounded-full
@@ -318,7 +327,7 @@ export function FeedPage() {
         <BrandLogo color="#27262F" width={30} />
       </button>
 
-      {showTimer && (
+      {isTimerOpen && (
         <TimerSummaryOverlay
           finalReport={finalReport}
           genreTimes={finalizedGenreTimes ?? genreTimes}
@@ -326,7 +335,10 @@ export function FeedPage() {
           onDownload={() => {
             void handleSelfDownload()
           }}
-          onFinish={() => navigate("/thank-you")}
+          onFinish={() => {
+            closeTimerOverlay()
+            navigate("/thank-you")
+          }}
           submissionHasError={submissionHasError}
           submissionMessage={submissionMessage}
         />
@@ -362,6 +374,7 @@ function FeedErrorState({
         </p>
         <button
           className="mt-5 inline-flex items-center justify-center rounded-full bg-violet px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(119,109,255,0.35)] active:scale-95 transition-transform"
+          data-testid="feed-error-retry"
           onClick={onRetry}
           type="button"
         >

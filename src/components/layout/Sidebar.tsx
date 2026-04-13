@@ -49,6 +49,7 @@ export function Sidebar({ theme }: SidebarProps) {
         
         {/* Timer button */}
         <button
+          data-testid="sidebar-timer-open-button"
           onClick={() => window.dispatchEvent(new Event("timeropen"))}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${textColor} ${hoverBg}`}
         >

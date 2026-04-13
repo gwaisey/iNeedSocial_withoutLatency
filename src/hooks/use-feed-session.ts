@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
-import { downloadSelfReport, getSupabaseStatusMessage, saveSessionData } from "../services/supabase"
+import {
+  getSessionStorage,
+  readFeedSessionSnapshot,
+  writeFeedSessionSnapshot,
+  type FeedSessionSnapshot,
+} from "../context/study-session-storage"
+import {
+  downloadSelfReport,
+  getSupabaseStatusMessage,
+  saveSessionData,
+} from "../services/supabase"
 import type { GenreKey, GenreTimes, Post, SessionReportPayload } from "../types/social"
 import { getUserFacingErrorMessage } from "../utils/error-utils"
-import {
-  buildSessionReport,
-  createEmptyGenreTimes,
-} from "../utils/feed-session"
+import { buildSessionReport, createEmptyGenreTimes } from "../utils/feed-session"
 
 type ScrollContainerRef = RefObject<HTMLDivElement | null>
 type HeaderRef = RefObject<HTMLDivElement | null>
@@ -15,6 +22,11 @@ type UseFeedSessionArgs = {
   headerRef: HeaderRef
   posts: Post[] | null
   scrollRef: ScrollContainerRef
+  studySessionId: string
+}
+
+type PersistSnapshotOptions = Partial<FeedSessionSnapshot> & {
+  commitActivePost?: boolean
 }
 
 const REGULAR_POST_SELECTOR = "[data-regular-post-id]"
@@ -24,28 +36,46 @@ export function useFeedSession({
   headerRef,
   posts,
   scrollRef,
+  studySessionId,
 }: UseFeedSessionArgs) {
-  const [genreTimes, setGenreTimes] = useState<GenreTimes>(() => createEmptyGenreTimes())
-  const [finalizedGenreTimes, setFinalizedGenreTimes] = useState<GenreTimes | null>(null)
-  const [finalReport, setFinalReport] = useState<SessionReportPayload | null>(null)
+  const storageRef = useRef(getSessionStorage())
+  const studySessionIdRef = useRef(studySessionId)
+  const restoredSnapshotRef = useRef(
+    readFeedSessionSnapshot(storageRef.current, studySessionIdRef.current)
+  )
+  const restoredSnapshot = restoredSnapshotRef.current
+  const configMessage = getSupabaseStatusMessage()
+
+  const [genreTimes, setGenreTimes] = useState<GenreTimes>(
+    () => restoredSnapshot?.genreTimes ?? createEmptyGenreTimes()
+  )
+  const [finalizedGenreTimes, setFinalizedGenreTimes] = useState<GenreTimes | null>(
+    () => restoredSnapshot?.finalizedGenreTimes ?? null
+  )
+  const [finalReport, setFinalReport] = useState<SessionReportPayload | null>(
+    () => restoredSnapshot?.finalReport ?? null
+  )
+  const [isTimerOpen, setIsTimerOpen] = useState(restoredSnapshot?.isTimerOpen ?? false)
   const [isSavingSession, setIsSavingSession] = useState(false)
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(
-    getSupabaseStatusMessage()
+    restoredSnapshot?.submissionMessage ?? configMessage
   )
   const [submissionHasError, setSubmissionHasError] = useState(
-    Boolean(getSupabaseStatusMessage())
+    restoredSnapshot?.submissionHasError ?? Boolean(configMessage)
   )
 
-  const sessionIdRef = useRef(
-    `session_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-  )
   const genreMapRef = useRef<Map<string, GenreKey>>(new Map())
   const genreTimesRef = useRef<GenreTimes>(genreTimes)
+  const finalizedGenreTimesRef = useRef<GenreTimes | null>(finalizedGenreTimes)
+  const finalReportRef = useRef<SessionReportPayload | null>(finalReport)
+  const submissionMessageRef = useRef<string | null>(submissionMessage)
+  const submissionHasErrorRef = useRef(submissionHasError)
+  const isTimerOpenRef = useRef(isTimerOpen)
   const activePostIdRef = useRef<string | null>(null)
   const activePostStartedAtRef = useRef<number | null>(null)
   const pendingActiveStartedAtRef = useRef<number | null>(null)
   const evaluationFrameRef = useRef<number | null>(null)
-  const hasSubmittedRef = useRef(false)
+  const hasSubmittedRef = useRef(restoredSnapshot?.hasSubmitted ?? false)
   const isSubmittingRef = useRef(false)
 
   useEffect(() => {
@@ -53,20 +83,38 @@ export function useFeedSession({
   }, [genreTimes])
 
   useEffect(() => {
-    genreMapRef.current = new Map(
-      (posts ?? []).map((post) => [post.id, post.genre] as const)
-    )
+    finalizedGenreTimesRef.current = finalizedGenreTimes
+  }, [finalizedGenreTimes])
+
+  useEffect(() => {
+    finalReportRef.current = finalReport
+  }, [finalReport])
+
+  useEffect(() => {
+    submissionMessageRef.current = submissionMessage
+  }, [submissionMessage])
+
+  useEffect(() => {
+    submissionHasErrorRef.current = submissionHasError
+  }, [submissionHasError])
+
+  useEffect(() => {
+    isTimerOpenRef.current = isTimerOpen
+  }, [isTimerOpen])
+
+  useEffect(() => {
+    genreMapRef.current = new Map((posts ?? []).map((post) => [post.id, post.genre] as const))
 
     if (
       posts &&
       posts.length > 0 &&
-      !finalReport &&
+      !finalReportRef.current &&
       !activePostIdRef.current &&
       activePostStartedAtRef.current === null
     ) {
       pendingActiveStartedAtRef.current = Date.now()
     }
-  }, [finalReport, posts])
+  }, [posts])
 
   const commitActivePostDuration = useCallback((now = Date.now()) => {
     const activePostId = activePostIdRef.current
@@ -100,10 +148,39 @@ export function useFeedSession({
     return nextGenreTimes
   }, [])
 
+  const persistSessionSnapshot = useCallback(
+    (options: PersistSnapshotOptions = {}) => {
+      const nextGenreTimes = options.commitActivePost
+        ? commitActivePostDuration()
+        : (options.genreTimes ?? genreTimesRef.current)
+      const snapshot: FeedSessionSnapshot = {
+        genreTimes: nextGenreTimes,
+        finalizedGenreTimes:
+          options.finalizedGenreTimes ?? finalizedGenreTimesRef.current,
+        finalReport: options.finalReport ?? finalReportRef.current,
+        hasSubmitted: options.hasSubmitted ?? hasSubmittedRef.current,
+        isTimerOpen: options.isTimerOpen ?? isTimerOpenRef.current,
+        submissionHasError:
+          options.submissionHasError ?? submissionHasErrorRef.current,
+        submissionMessage: options.submissionMessage ?? submissionMessageRef.current,
+      }
+
+      writeFeedSessionSnapshot(
+        storageRef.current,
+        studySessionIdRef.current,
+        snapshot
+      )
+
+      return snapshot
+    },
+    [commitActivePostDuration]
+  )
+
   const finalizeAttributedTiming = useCallback(() => {
     const nextGenreTimes = commitActivePostDuration()
     activePostIdRef.current = null
     activePostStartedAtRef.current = null
+    pendingActiveStartedAtRef.current = null
     return nextGenreTimes
   }, [commitActivePostDuration])
 
@@ -153,7 +230,7 @@ export function useFeedSession({
   }, [headerRef, scrollRef])
 
   const scheduleActivePostEvaluation = useCallback(() => {
-    if (!posts || finalReport) {
+    if (!posts || finalReportRef.current) {
       return
     }
 
@@ -186,10 +263,10 @@ export function useFeedSession({
         : pendingActiveStartedAtRef.current ?? now
       pendingActiveStartedAtRef.current = null
     })
-  }, [commitActivePostDuration, finalReport, findDominantPostId, posts])
+  }, [commitActivePostDuration, findDominantPostId, posts])
 
   useEffect(() => {
-    if (!posts || finalReport) {
+    if (!posts || finalReportRef.current) {
       return
     }
 
@@ -215,19 +292,62 @@ export function useFeedSession({
         evaluationFrameRef.current = null
       }
     }
-  }, [finalReport, posts, scheduleActivePostEvaluation, scrollRef])
+  }, [posts, scheduleActivePostEvaluation, scrollRef])
+
+  useEffect(() => {
+    persistSessionSnapshot()
+  }, [
+    finalizedGenreTimes,
+    finalReport,
+    genreTimes,
+    isTimerOpen,
+    persistSessionSnapshot,
+    submissionHasError,
+    submissionMessage,
+  ])
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      persistSessionSnapshot({ commitActivePost: true })
+      activePostIdRef.current = null
+      activePostStartedAtRef.current = null
+      pendingActiveStartedAtRef.current = null
+    }
+
+    window.addEventListener("pagehide", handlePageHide)
+    return () => window.removeEventListener("pagehide", handlePageHide)
+  }, [persistSessionSnapshot])
+
+  useEffect(() => {
+    return () => {
+      persistSessionSnapshot({ commitActivePost: true })
+    }
+  }, [persistSessionSnapshot])
 
   const openTimer = useCallback(async () => {
-    const nextGenreTimes = finalReport
-      ? finalizedGenreTimes ?? genreTimesRef.current
+    setIsTimerOpen(true)
+    isTimerOpenRef.current = true
+
+    const nextGenreTimes = finalReportRef.current
+      ? finalizedGenreTimesRef.current ?? genreTimesRef.current
       : finalizeAttributedTiming()
     const report =
-      finalReport ?? buildSessionReport(sessionIdRef.current, nextGenreTimes, appVersion)
+      finalReportRef.current ??
+      buildSessionReport(studySessionIdRef.current, nextGenreTimes, appVersion)
 
-    if (!finalReport) {
+    if (!finalReportRef.current) {
+      finalizedGenreTimesRef.current = nextGenreTimes
+      finalReportRef.current = report
       setFinalizedGenreTimes(nextGenreTimes)
       setFinalReport(report)
     }
+
+    persistSessionSnapshot({
+      finalReport: report,
+      finalizedGenreTimes: nextGenreTimes,
+      genreTimes: nextGenreTimes,
+      isTimerOpen: true,
+    })
 
     if (hasSubmittedRef.current || isSubmittingRef.current) {
       return report
@@ -237,55 +357,124 @@ export function useFeedSession({
     setIsSavingSession(true)
     setSubmissionHasError(false)
     setSubmissionMessage("Menyimpan sesi...")
+    submissionHasErrorRef.current = false
+    submissionMessageRef.current = "Menyimpan sesi..."
+    persistSessionSnapshot({
+      finalReport: report,
+      finalizedGenreTimes: nextGenreTimes,
+      genreTimes: nextGenreTimes,
+      isTimerOpen: true,
+      submissionHasError: false,
+      submissionMessage: "Menyimpan sesi...",
+    })
 
     try {
       await saveSessionData(report)
       hasSubmittedRef.current = true
       setSubmissionHasError(false)
       setSubmissionMessage("Sesi berhasil disimpan.")
+      submissionHasErrorRef.current = false
+      submissionMessageRef.current = "Sesi berhasil disimpan."
+      persistSessionSnapshot({
+        finalReport: report,
+        finalizedGenreTimes: nextGenreTimes,
+        genreTimes: nextGenreTimes,
+        hasSubmitted: true,
+        isTimerOpen: true,
+        submissionHasError: false,
+        submissionMessage: "Sesi berhasil disimpan.",
+      })
     } catch (error) {
-      setSubmissionHasError(true)
-      setSubmissionMessage(
-        getUserFacingErrorMessage(error, "Sesi tidak dapat disimpan.", "feed-session:save")
+      const nextMessage = getUserFacingErrorMessage(
+        error,
+        "Sesi tidak dapat disimpan.",
+        "feed-session:save"
       )
+
+      setSubmissionHasError(true)
+      setSubmissionMessage(nextMessage)
+      submissionHasErrorRef.current = true
+      submissionMessageRef.current = nextMessage
+      persistSessionSnapshot({
+        finalReport: report,
+        finalizedGenreTimes: nextGenreTimes,
+        genreTimes: nextGenreTimes,
+        hasSubmitted: false,
+        isTimerOpen: true,
+        submissionHasError: true,
+        submissionMessage: nextMessage,
+      })
     } finally {
       isSubmittingRef.current = false
       setIsSavingSession(false)
     }
 
     return report
-  }, [appVersion, finalReport, finalizedGenreTimes, finalizeAttributedTiming])
+  }, [appVersion, finalizeAttributedTiming, persistSessionSnapshot])
+
+  const closeTimerOverlay = useCallback(() => {
+    setIsTimerOpen(false)
+    isTimerOpenRef.current = false
+    persistSessionSnapshot({ isTimerOpen: false })
+  }, [persistSessionSnapshot])
 
   const downloadReport = useCallback(async () => {
-    const nextGenreTimes = finalReport
-      ? finalizedGenreTimes ?? genreTimesRef.current
+    const nextGenreTimes = finalReportRef.current
+      ? finalizedGenreTimesRef.current ?? genreTimesRef.current
       : finalizeAttributedTiming()
     const report =
-      finalReport ?? buildSessionReport(sessionIdRef.current, nextGenreTimes, appVersion)
+      finalReportRef.current ??
+      buildSessionReport(studySessionIdRef.current, nextGenreTimes, appVersion)
 
-    if (!finalReport) {
+    if (!finalReportRef.current) {
+      finalizedGenreTimesRef.current = nextGenreTimes
+      finalReportRef.current = report
       setFinalizedGenreTimes(nextGenreTimes)
       setFinalReport(report)
     }
 
+    persistSessionSnapshot({
+      finalReport: report,
+      finalizedGenreTimes: nextGenreTimes,
+      genreTimes: nextGenreTimes,
+      isTimerOpen: isTimerOpenRef.current,
+    })
+
     try {
       await downloadSelfReport(report)
     } catch (error) {
-      setSubmissionHasError(true)
-      setSubmissionMessage(
-        getUserFacingErrorMessage(error, "Gagal mengekspor laporan.", "feed-session:export")
+      const nextMessage = getUserFacingErrorMessage(
+        error,
+        "Gagal mengekspor laporan.",
+        "feed-session:export"
       )
+
+      setSubmissionHasError(true)
+      setSubmissionMessage(nextMessage)
+      submissionHasErrorRef.current = true
+      submissionMessageRef.current = nextMessage
+      persistSessionSnapshot({
+        finalReport: report,
+        finalizedGenreTimes: nextGenreTimes,
+        genreTimes: nextGenreTimes,
+        isTimerOpen: isTimerOpenRef.current,
+        submissionHasError: true,
+        submissionMessage: nextMessage,
+      })
     }
-  }, [appVersion, finalReport, finalizedGenreTimes, finalizeAttributedTiming])
+  }, [appVersion, finalizeAttributedTiming, persistSessionSnapshot])
 
   return {
+    closeTimerOverlay,
     commitActivePostDuration,
     downloadReport,
     finalReport,
     finalizedGenreTimes,
     genreTimes,
     isSavingSession,
+    isTimerOpen,
     openTimer,
+    persistSessionSnapshot,
     scheduleActivePostEvaluation,
     submissionHasError,
     submissionMessage,

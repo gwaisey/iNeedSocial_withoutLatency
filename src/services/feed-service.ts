@@ -1,3 +1,4 @@
+import { z } from "zod"
 import {
   GENRE_KEYS,
   type FeedPayload,
@@ -14,8 +15,34 @@ export type FeedSource = "mock" | "api"
 type RawPost = Omit<Post, "genre"> & { genre?: string | null }
 
 type RawFeedPayload = {
-  posts?: RawPost[]
+  posts: RawPost[]
 }
+
+const rawMediaSchema = z
+  .object({
+    src: z.string().min(1),
+    alt: z.string(),
+    poster: z.string().optional(),
+  })
+  .strict()
+
+const rawPostSchema = z
+  .object({
+    id: z.string().min(1),
+    type: z.enum(["image", "carousel", "video"]),
+    username: z.string(),
+    likes: z.string(),
+    caption: z.string(),
+    media: z.array(rawMediaSchema).min(1),
+    genre: z.string().nullable().optional(),
+  })
+  .strict()
+
+const rawFeedPayloadSchema = z
+  .object({
+    posts: z.array(rawPostSchema),
+  })
+  .strict()
 
 export function resolveFeedSource(value: string | undefined): FeedSource {
   return value === "api" ? "api" : "mock"
@@ -38,25 +65,33 @@ function normalizeGenre(genre?: string | null): GenreKey {
   return VALID_GENRES.has(genre as GenreKey) ? (genre as GenreKey) : "humor"
 }
 
+export function validateFeedPayload(payload: unknown): RawFeedPayload {
+  const result = rawFeedPayloadSchema.safeParse(payload)
+  if (result.success) {
+    return result.data
+  }
+
+  console.error("[feed-service:validation]", result.error)
+  throw new Error("Format feed tidak valid.")
+}
+
 export function normalizeFeedPayload(theme: ThemeMode, payload: RawFeedPayload): FeedPayload {
   return {
     theme,
-    posts: Array.isArray(payload.posts)
-      ? payload.posts.map((post) => ({
-          ...post,
-          genre: normalizeGenre(post.genre),
-        }))
-      : [],
+    posts: payload.posts.map((post) => ({
+      ...post,
+      genre: normalizeGenre(post.genre),
+    })),
   }
 }
 
 async function mockGetFeed(theme: ThemeMode): Promise<FeedPayload> {
-  const payload = await apiFetch<RawFeedPayload>("/content/feed.json")
+  const payload = validateFeedPayload(await apiFetch<unknown>("/content/feed.json"))
   return normalizeFeedPayload(theme, payload)
 }
 
 async function realGetFeed(theme: ThemeMode): Promise<FeedPayload> {
-  const payload = await apiFetch<RawFeedPayload>(`/api/feed?theme=${theme}`)
+  const payload = validateFeedPayload(await apiFetch<unknown>(`/api/feed?theme=${theme}`))
   return normalizeFeedPayload(theme, payload)
 }
 

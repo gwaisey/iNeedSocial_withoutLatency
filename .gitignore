@@ -7,3 +7,5 @@ vite.config.d.ts
 .env.local
 vite-dev.out.log
 vite-dev.err.log
+test-results/
+playwright-report/

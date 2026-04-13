@@ -1,5 +1,6 @@
 const SAFE_ERROR_PATTERNS = [
   /^Feed tidak dapat dimuat/i,
+  /^Format feed tidak valid/i,
   /^Permintaan data gagal/i,
   /^Penyimpanan Supabase dinonaktifkan/i,
   /^VITE_/i,

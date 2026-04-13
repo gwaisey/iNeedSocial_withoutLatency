@@ -27,6 +27,7 @@ export function WelcomePage() {
         <div className="relative mt-12 flex justify-end">
           <button
             aria-label="Lanjut ke feed"
+            data-testid="start-study-button"
             className="
               flex h-14 w-14 items-center justify-center
               rounded-full bg-ink text-white

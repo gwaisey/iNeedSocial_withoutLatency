@@ -30,12 +30,13 @@ File utama:
 
 - `src/App.tsx` mendefinisikan route dan mempertahankan `/timer` sebagai redirect ke `/feed`.
 - `src/pages/feed-page.tsx` mengorkestrasi layout feed, status loading, tutorial, dan pemulihan posisi scroll saat ganti tema.
-- `src/hooks/use-feed-session.ts` menangani atribusi waktu per post, finalisasi sesi, serta penyimpanan dan ekspor laporan peserta.
+- `src/hooks/use-feed-session.ts` menangani atribusi waktu per post, pemulihan snapshot sesi setelah refresh, finalisasi sesi, serta penyimpanan dan ekspor laporan peserta.
 - `src/components/timer-summary-overlay.tsx` merender overlay ringkasan durasi yang dipakai ulang dari snapshot sesi final.
-- `src/services/feed-service.ts` memilih sumber data feed berdasarkan env lalu memuat serta menormalisasi data feed.
-- `src/services/supabase.ts` memvalidasi konfigurasi Supabase frontend, menyimpan satu ringkasan sesi, dan me-load `xlsx` secara lazy untuk ekspor per pengguna.
+- `src/services/feed-service.ts` memilih sumber data feed berdasarkan env, memvalidasi payload feed, lalu menormalisasi data feed.
+- `src/services/supabase.ts` memvalidasi konfigurasi Supabase frontend, menyimpan satu ringkasan sesi secara idempoten berdasarkan `session_id`, dan me-load `xlsx` secara lazy untuk ekspor per pengguna.
 - `scripts/export-all-sessions.mjs` adalah jalur ekspor admin lokal untuk seluruh data sesi menggunakan service-role key privat.
-- `src/context/study-context.tsx` menyimpan state komentar, suka, dan repost dengan namespace berbasis sesi studi.
+- `src/context/study-context.tsx` menyimpan state komentar, suka, repost, dan session id aktif dengan namespace berbasis sesi studi.
+- `src/context/study-session-storage.ts` menyimpan interaksi, progres tutorial, dan snapshot timer/feed di `sessionStorage`.
 - `src/types/social.ts` berisi tipe feed, genre, dan payload sesi.
 
 ## Routing
@@ -58,9 +59,9 @@ Feed service menormalisasi semua post ke model internal yang ketat sebelum dipak
 Sumber data feed dikontrol oleh `VITE_FEED_SOURCE`:
 
 - `mock` memuat `public/content/feed.json`
-- `api` memanggil `/api/feed?theme=...`
+- `api` memanggil `/api/feed?theme=...` sebagai kontrak integrasi future-proof
 
-Nilai selain `api` dianggap `mock`.
+Nilai selain `api` dianggap `mock`. Repo ini belum menyediakan implementasi backend `/api/feed`.
 
 ### Tema
 
@@ -90,10 +91,12 @@ Kategori yang tidak dikenal atau kosong dinormalisasi sekali menjadi `humor` di 
 
 Perilaku penting:
 
-- Session id dibuat sekali saat sesi feed dimulai.
+- Session id studi yang sama dipakai sebagai sumber kebenaran untuk suka, repost, tutorial, dan snapshot timer.
 - Waktu selalu dialokasikan ke satu post reguler setelah feed tampil, sehingga timer utama selaras dengan total kategori.
 - Durasi post aktif difinalisasi sebelum overlay durasi dibuka.
 - Total kategori yang sudah difinalisasi dipakai ulang untuk penyimpanan Supabase dan ekspor Excel per pengguna.
+- Snapshot sesi ditulis ke `sessionStorage` pada perubahan state penting, `pagehide`, dan sebelum transisi tema sehingga refresh pada tab yang sama dapat melanjutkan sesi aktif.
+- Reload halaman tidak menghitung jeda refresh sebagai durasi feed aktif.
 - Guard mencegah insert sesi ganda jika overlay dibuka kembali.
 
 Overlay membekukan durasi total dan rincian kategori berdasarkan snapshot final sesi tersebut.
@@ -103,6 +106,7 @@ Overlay membekukan durasi total dan rincian kategori berdasarkan snapshot final 
 Interaksi feed ringan disimpan terpisah dari payload durasi sesi:
 
 - suka dan repost disimpan di `sessionStorage`,
+- progres tutorial dan snapshot timer ikut disimpan di `sessionStorage` dengan namespace sesi yang sama,
 - namespace penyimpanan dibuat ulang saat sesi baru dimulai dari halaman sambutan,
 - refresh pada tab yang sama tetap mempertahankan state sesi aktif,
 - sesi baru tidak mewarisi suka/repost dari sesi peserta sebelumnya.
@@ -140,6 +144,7 @@ Penyimpanan Supabase frontend juga eksplisit:
 
 - validasi env sebelum membuat client,
 - gagal secara graceful jika konfigurasi tidak ada atau tidak valid,
+- menggunakan `upsert` berbasis `session_id` dengan retry terbatas hanya untuk kegagalan transient,
 - tampilkan status penyimpanan di overlay durasi tanpa menghambat alur studi.
 
 ## Batasan Akses Supabase
@@ -180,10 +185,13 @@ Repo menyediakan quality gate minimum berikut:
 - `npm run build`
 - `npm run lint`
 - `npm run test`
+- `npm run test:e2e`
 
 Pengujian saat ini berfokus pada:
 
 - pemilihan sumber feed dan normalisasi payload,
+- validasi bentuk feed yang salah,
 - alokasi pembulatan durasi kategori,
 - namespace storage berbasis sesi,
-- fallback error yang aman untuk UI.
+- retry dan idempotensi penyimpanan sesi,
+- smoke flow browser untuk refresh sesi feed dan state error feed.

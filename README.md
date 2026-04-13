@@ -50,6 +50,12 @@ Menjalankan pengujian unit dan komponen:
 npm run test
 ```
 
+Menjalankan smoke test browser:
+
+```bash
+npm run test:e2e
+```
+
 Pratinjau hasil build:
 
 ```bash
@@ -70,10 +76,10 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 
 `VITE_FEED_SOURCE` mendukung dua nilai:
 
-- `mock` untuk memuat `public/content/feed.json`
-- `api` untuk memanggil `/api/feed?theme=...`
+- `mock` untuk memuat `public/content/feed.json` dan merupakan mode built-in yang aktif
+- `api` untuk memanggil `/api/feed?theme=...` sebagai kontrak integrasi future-proof
 
-Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`.
+Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`. Route `/api/feed` tidak disediakan di repo ini, sehingga mode `api` tetap membutuhkan backend eksternal.
 
 Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Overlay durasi hanya akan menampilkan pesan non-blocking, dan peserta tetap dapat mengunduh laporan sesinya sendiri secara lokal.
 
@@ -130,9 +136,10 @@ Aliran post yang sama digunakan untuk mode terang dan gelap. Konten stimulus pen
 ## Perilaku Interaksi Peserta
 
 - Status suka dan repost sekarang disimpan di `sessionStorage`, bukan `localStorage`.
-- Refresh pada tab yang sama tetap mempertahankan interaksi selama sesi studi yang sama.
+- Refresh pada tab yang sama tetap mempertahankan interaksi, progres tutorial, dan snapshot timer selama sesi studi yang sama.
 - Memulai sesi baru dari halaman sambutan akan membuat namespace sesi baru dan menghapus interaksi sesi sebelumnya.
 - Membuka ulang overlay durasi di sesi yang sama tidak mereset interaksi peserta.
+- Reload halaman tidak menghitung jeda refresh sebagai waktu melihat feed, tetapi melanjutkan timer dari snapshot sesi aktif setelah feed kembali tampil.
 
 ## Penyimpanan Sesi dan Ekspor
 
@@ -140,6 +147,7 @@ Aliran post yang sama digunakan untuk mode terang dan gelap. Konten stimulus pen
 - Browser peserta hanya menjalankan perilaku yang aman untuk peserta.
 - Peserta dapat mengunduh laporan sesinya sendiri dalam format `.xlsx` dari overlay durasi.
 - Ekspor seluruh sesi tidak tersedia di UI peserta.
+- Penyimpanan sesi peserta sekarang bersifat idempoten berdasarkan `session_id`, sehingga refresh atau retry tidak membuat baris duplikat jika migrasi database sudah diterapkan.
 
 ### Ekspor semua sesi untuk admin
 
@@ -182,8 +190,10 @@ scripts/
 
 - Saat feed dimuat, aplikasi menampilkan skeleton.
 - Jika pemuatan feed gagal, aplikasi menampilkan state retry di dalam halaman.
+- Payload feed divalidasi secara runtime sebelum dinormalisasi. Jika format feed tidak valid, UI menampilkan pesan aman yang terlokalisasi dan detail error mentah dicatat ke `console.error`.
 - Waktu feed dialokasikan terus-menerus ke post dominan yang terlihat, sehingga timer utama selaras dengan total kategori.
 - Video hanya autoplay saat terlihat, dan video di carousel hanya autoplay pada slide aktif.
 - Error runtime yang aman untuk pengguna tetap ditampilkan secara lokal, sementara error mentah dicatat ke `console.error` untuk debugging.
 - Output build di `dist/`, file `.env`, log lokal Vite, `*.tsbuildinfo`, dan output config hasil generate tidak boleh dilacak di git.
 - Jika file-file terabaikan tersebut pernah ter-commit, bersihkan index git saat ini dan rewrite history repo agar artefak serta secret lama benar-benar terhapus.
+- Terapkan migrasi `supabase/migrations/202604130900_feed_sessions_session_id_unique.sql` agar tabel `feed_sessions` memiliki constraint unik pada `session_id` dan duplikasi lama dibersihkan sebelum upsert client dijalankan penuh.

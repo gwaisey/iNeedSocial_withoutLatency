@@ -300,6 +300,8 @@ export function FeedPost({
         <button
           aria-label="Suka postingan"
           className="flex items-center gap-1 min-h-[44px] px-1.5 active:scale-75 transition-transform"
+          data-testid={`like-button-${post.id}`}
+          data-liked={isLiked ? "true" : "false"}
           onClick={onLike}
           style={{ color: isLiked ? "#C83C53" : undefined }}
           type="button"
