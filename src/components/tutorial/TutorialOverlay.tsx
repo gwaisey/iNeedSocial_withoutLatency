@@ -1,5 +1,5 @@
 import { ChevronRight, X } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import {
   getSessionStorage,
   readTutorialState,
@@ -63,21 +63,30 @@ interface TutorialOverlayProps {
 
 export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
   const { sessionId } = useStudyState()
-  const [idx, setIdx] = useState(() => readTutorialState(getSessionStorage(), sessionId).currentStep)
+  const currentSessionId = sessionId ?? ""
+  const [idx, setIdx] = useState(() =>
+    readTutorialState(getSessionStorage(), currentSessionId).currentStep
+  )
   const [spot, setSpot] = useState<SpotRect | null>(null)
   const [winH, setWinH] = useState(window.innerHeight)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const primaryActionRef = useRef<HTMLButtonElement | null>(null)
+  const skipActionRef = useRef<HTMLButtonElement | null>(null)
 
   const step = STEPS[idx]
+  const isSpotlightStep = Boolean(step.selector)
   const isLast = idx === STEPS.length - 1
   const pad = 12
   const gap = 14
+  const titleId = `tutorial-title-${idx}`
+  const descriptionId = `tutorial-description-${idx}`
 
   useEffect(() => {
-    writeTutorialState(getSessionStorage(), sessionId, {
+    writeTutorialState(getSessionStorage(), currentSessionId, {
       completed: false,
       currentStep: idx,
     })
-  }, [idx, sessionId])
+  }, [currentSessionId, idx])
 
   useEffect(() => {
     if (!step.selector) {
@@ -85,24 +94,69 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
       return
     }
 
-    const timeoutId = window.setTimeout(() => {
+    let animationFrame = 0
+
+    const updateSpot = () => {
       const element = document.querySelector(step.selector as string)
       if (!element) {
-        setSpot(null)
         return
       }
 
       const rect = element.getBoundingClientRect()
       setSpot({ x: rect.left, y: rect.top, w: rect.width, h: rect.height })
       setWinH(window.innerHeight)
-    }, 60)
+    }
 
-    return () => window.clearTimeout(timeoutId)
+    const scheduleUpdateSpot = () => {
+      window.cancelAnimationFrame(animationFrame)
+      animationFrame = window.requestAnimationFrame(updateSpot)
+    }
+
+    const timeoutId = window.setTimeout(scheduleUpdateSpot, 60)
+    window.addEventListener("resize", scheduleUpdateSpot)
+    document.addEventListener("scroll", scheduleUpdateSpot, true)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.cancelAnimationFrame(animationFrame)
+      window.removeEventListener("resize", scheduleUpdateSpot)
+      document.removeEventListener("scroll", scheduleUpdateSpot, true)
+    }
   }, [idx, step.selector])
+
+  useEffect(() => {
+    let retryCount = 0
+    let retryTimeoutId = 0
+
+    const focusPrimaryAction = () => {
+      const primaryAction = primaryActionRef.current
+      if (!primaryAction) {
+        return
+      }
+
+      primaryAction.focus()
+      if (document.activeElement === primaryAction || retryCount >= 4) {
+        return
+      }
+
+      retryCount += 1
+      retryTimeoutId = window.setTimeout(focusPrimaryAction, 50)
+    }
+
+    focusPrimaryAction()
+    const initialTimeoutId = window.setTimeout(focusPrimaryAction, 0)
+    const focusFrame = window.requestAnimationFrame(focusPrimaryAction)
+
+    return () => {
+      window.clearTimeout(initialTimeoutId)
+      window.clearTimeout(retryTimeoutId)
+      window.cancelAnimationFrame(focusFrame)
+    }
+  }, [idx])
 
   const handleNext = useCallback(() => {
     if (isLast) {
-      writeTutorialState(getSessionStorage(), sessionId, {
+      writeTutorialState(getSessionStorage(), currentSessionId, {
         completed: true,
         currentStep: idx,
       })
@@ -111,15 +165,15 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
     }
 
     setIdx((current) => current + 1)
-  }, [idx, isLast, onDone, sessionId])
+  }, [currentSessionId, idx, isLast, onDone])
 
   const handleSkip = useCallback(() => {
-    writeTutorialState(getSessionStorage(), sessionId, {
+    writeTutorialState(getSessionStorage(), currentSessionId, {
       completed: true,
       currentStep: idx,
     })
     onDone()
-  }, [idx, onDone, sessionId])
+  }, [currentSessionId, idx, onDone])
 
   let tooltipTop: number | undefined
   let tooltipBottom: number | undefined
@@ -135,106 +189,53 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
     }
   }
 
-  function Dots() {
-    return (
-      <div className="flex items-center gap-1.5">
-        {STEPS.map((_, index) => (
-          <span
-            key={index}
-            className={`h-[5px] rounded-full transition-all duration-300 ${
-              index === idx ? "w-5 bg-violet" : "w-[5px] bg-ink/20"
-            }`}
-          />
-        ))}
-      </div>
-    )
-  }
+  const dots = (
+    <div className="flex items-center gap-1.5">
+      {STEPS.map((_, index) => (
+        <span
+          key={index}
+          className={`h-[5px] rounded-full transition-all duration-300 ${
+            index === idx ? "w-5 bg-violet" : "w-[5px] bg-ink/20"
+          }`}
+        />
+      ))}
+    </div>
+  )
 
-  function FullModal() {
-    return (
-      <div className="absolute inset-0 flex items-end justify-center px-5 pb-16 sm:items-center sm:pb-0">
-        <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-[0_32px_64px_rgba(0,0,0,0.4)] animate-slide-up">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet/10 text-4xl">
-            {step.emoji}
-          </div>
-          <h2 className="mb-2 text-xl font-bold text-ink">{step.title}</h2>
-          <p className="mb-8 text-sm leading-relaxed text-haze">{step.body}</p>
-          <div className="flex items-center justify-between gap-4">
-            <Dots />
-            <div className="flex items-center gap-3">
-              {!isLast && (
-                <button
-                  className="text-sm font-medium text-haze active:opacity-60"
-                  data-testid="tutorial-skip-button"
-                  onClick={handleSkip}
-                  type="button"
-                >
-                  Lewati
-                </button>
-              )}
-              <button
-                className="flex items-center gap-2 rounded-full bg-violet px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(119,109,255,0.45)] active:scale-95 transition-transform"
-                data-testid="tutorial-next-button"
-                onClick={handleNext}
-                type="button"
-              >
-                {isLast ? "Mulai Menjelajah!" : "Selanjutnya"}
-                <ChevronRight size={16} strokeWidth={2.5} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const handleDialogKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") {
+      return
+    }
 
-  function SpotTooltip() {
-    return (
-      <div
-        className="absolute animate-slide-up"
-        style={{ left: 16, right: 16, top: tooltipTop, bottom: tooltipBottom }}
-      >
-        <div className="overflow-hidden rounded-2xl bg-white shadow-[0_24px_48px_rgba(0,0,0,0.35)]">
-          <div className="h-1 bg-gradient-to-r from-violet to-signal" />
-          <div className="p-5">
-            <button
-              aria-label="Lewati tutorial"
-              className="absolute right-3 top-3 rounded-full p-1.5 text-haze/60 transition-colors hover:bg-ink/5"
-              data-testid="tutorial-skip-button"
-              onClick={handleSkip}
-              type="button"
-            >
-              <X size={14} strokeWidth={2} />
-            </button>
-            <div className="mb-4 flex items-start gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-violet/10 text-xl">
-                {step.emoji}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[15px] font-bold leading-tight text-ink">{step.title}</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-haze">{step.body}</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <Dots />
-              <button
-                className="flex items-center gap-1.5 rounded-full bg-violet px-4 py-2 text-xs font-bold text-white shadow-[0_4px_12px_rgba(119,109,255,0.4)] active:scale-95 transition-transform"
-                data-testid="tutorial-next-button"
-                onClick={handleNext}
-                type="button"
-              >
-                {isLast ? "Selesai" : "Lanjut"}
-                <ChevronRight size={13} strokeWidth={2.5} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    const focusableButtons = [skipActionRef.current, primaryActionRef.current].filter(
+      (button): button is HTMLButtonElement => Boolean(button)
     )
-  }
+
+    if (focusableButtons.length === 0) {
+      return
+    }
+
+    const firstButton = focusableButtons[0]
+    const lastButton = focusableButtons[focusableButtons.length - 1]
+    const activeElement = document.activeElement
+    const focusIsInsideTutorial = focusableButtons.includes(activeElement as HTMLButtonElement)
+
+    if (event.shiftKey) {
+      if (!focusIsInsideTutorial || activeElement === firstButton) {
+        event.preventDefault()
+        lastButton.focus()
+      }
+      return
+    }
+
+    if (!focusIsInsideTutorial || activeElement === lastButton) {
+      event.preventDefault()
+      firstButton.focus()
+    }
+  }, [])
 
   return (
-    <div className="fixed inset-0 z-[200]">
+    <div className="fixed inset-0 z-[200] pointer-events-auto">
       <svg
         aria-hidden="true"
         className="absolute inset-0 h-full w-full"
@@ -288,16 +289,113 @@ export function TutorialOverlay({ onDone }: TutorialOverlayProps) {
         )}
       </svg>
 
-      {spot && (
-        <div
-          className="absolute inset-0"
-          onClick={handleNext}
-          role="presentation"
-        />
+      {!isSpotlightStep && (
+        <div className="pointer-events-auto absolute inset-0 flex items-end justify-center px-5 pb-16 sm:items-center sm:pb-0">
+          <div
+            aria-describedby={descriptionId}
+            aria-labelledby={titleId}
+            aria-modal="true"
+            className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-[0_32px_64px_rgba(0,0,0,0.4)] animate-slide-up"
+            onKeyDown={handleDialogKeyDown}
+            ref={dialogRef}
+            role="dialog"
+          >
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet/10 text-4xl">
+              {step.emoji}
+            </div>
+            <h2 className="mb-2 text-xl font-bold text-ink" id={titleId}>
+              {step.title}
+            </h2>
+            <p className="mb-8 text-sm leading-relaxed text-haze" id={descriptionId}>
+              {step.body}
+            </p>
+            <div className="flex items-center justify-between gap-4">
+              {dots}
+              <div className="flex items-center gap-3">
+                {!isLast && (
+                  <button
+                    className="text-sm font-medium text-haze active:opacity-60"
+                    data-testid="tutorial-skip-button"
+                    onClick={handleSkip}
+                    ref={skipActionRef}
+                    type="button"
+                  >
+                    Lewati
+                  </button>
+                )}
+                <button
+                  autoFocus
+                  className="flex items-center gap-2 rounded-full bg-violet px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(119,109,255,0.45)] active:scale-95 transition-transform"
+                  data-testid="tutorial-next-button"
+                  onClick={handleNext}
+                  ref={primaryActionRef}
+                  type="button"
+                >
+                  {isLast ? "Mulai Menjelajah!" : "Selanjutnya"}
+                  <ChevronRight size={16} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
-
-      {!spot && <FullModal />}
-      {spot && <SpotTooltip />}
+      {isSpotlightStep && (
+        <div
+          className="pointer-events-none absolute animate-slide-up"
+          style={{ left: 16, right: 16, top: tooltipTop, bottom: tooltipBottom ?? 24 }}
+        >
+          <div
+            aria-describedby={descriptionId}
+            aria-labelledby={titleId}
+            aria-modal="true"
+            className="pointer-events-auto overflow-hidden rounded-2xl bg-white shadow-[0_24px_48px_rgba(0,0,0,0.35)]"
+            onKeyDown={handleDialogKeyDown}
+            ref={dialogRef}
+            role="dialog"
+          >
+            <div className="h-1 bg-gradient-to-r from-violet to-signal" />
+            <div className="p-5">
+              <button
+                aria-label="Lewati tutorial"
+                className="absolute right-3 top-3 rounded-full p-1.5 text-haze/60 transition-colors hover:bg-ink/5"
+                data-testid="tutorial-skip-button"
+                onClick={handleSkip}
+                ref={skipActionRef}
+                type="button"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-violet/10 text-xl">
+                  {step.emoji}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-[15px] font-bold leading-tight text-ink" id={titleId}>
+                    {step.title}
+                  </h2>
+                  <p className="mt-0.5 text-[13px] leading-snug text-haze" id={descriptionId}>
+                    {step.body}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                {dots}
+                <button
+                  autoFocus
+                  className="flex items-center gap-1.5 rounded-full bg-violet px-4 py-2 text-xs font-bold text-white shadow-[0_4px_12px_rgba(119,109,255,0.4)] active:scale-95 transition-transform"
+                  data-testid="tutorial-next-button"
+                  onClick={handleNext}
+                  ref={primaryActionRef}
+                  type="button"
+                >
+                  {isLast ? "Selesai" : "Lanjut"}
+                  <ChevronRight size={13} strokeWidth={2.5} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -6,31 +6,35 @@ export type InteractionKind = "liked" | "reposted"
 
 export type StorageLike = Pick<Storage, "getItem" | "removeItem" | "setItem">
 
-const ACTIVE_SESSION_KEY = "gaby:study:active-session"
+const STORAGE_NAMESPACE = "ineedsocial:study"
+const ACTIVE_SESSION_KEY = `${STORAGE_NAMESPACE}:active-session`
 const FEED_SNAPSHOT_SUFFIX = "feed-session"
 const TUTORIAL_STATE_SUFFIX = "tutorial"
+let hasWarnedStorageFallback = false
 
 export type TutorialState = {
   completed: boolean
   currentStep: number
 }
 
+export type FeedSessionStatus = "active" | "ended"
+
 export type FeedSessionSnapshot = {
+  status: FeedSessionStatus
   genreTimes: GenreTimes
   finalizedGenreTimes: GenreTimes | null
   finalReport: SessionReportPayload | null
   hasSubmitted: boolean
-  isTimerOpen: boolean
   submissionHasError: boolean
   submissionMessage: string | null
 }
 
 function buildInteractionKey(sessionId: string, kind: InteractionKind) {
-  return `gaby:study:${sessionId}:${kind}`
+  return `${STORAGE_NAMESPACE}:${sessionId}:${kind}`
 }
 
 function buildSessionScopedKey(sessionId: string, suffix: string) {
-  return `gaby:study:${sessionId}:${suffix}`
+  return `${STORAGE_NAMESPACE}:${sessionId}:${suffix}`
 }
 
 function createSessionId() {
@@ -67,23 +71,39 @@ export function getSessionStorage(): StorageLike | null {
   try {
     return window.sessionStorage
   } catch {
+    if (!hasWarnedStorageFallback) {
+      console.warn(
+        "[study-session-storage] sessionStorage tidak tersedia; state sesi akan bersifat sementara."
+      )
+      hasWarnedStorageFallback = true
+    }
     return null
   }
 }
 
-export function ensureStudySession(storage: StorageLike | null) {
+export function readActiveStudySession(storage: StorageLike | null) {
   if (!storage) {
-    return createSessionId()
+    return null
   }
 
-  const existing = storage.getItem(ACTIVE_SESSION_KEY)
-  if (existing) {
-    return existing
+  return storage.getItem(ACTIVE_SESSION_KEY)
+}
+
+export function clearStudySession(storage: StorageLike | null, sessionId?: string | null) {
+  if (!storage) {
+    return
   }
 
-  const nextSessionId = createSessionId()
-  storage.setItem(ACTIVE_SESSION_KEY, nextSessionId)
-  return nextSessionId
+  const targetSessionId = sessionId ?? readActiveStudySession(storage)
+  if (!targetSessionId) {
+    return
+  }
+
+  removeStudySessionData(storage, targetSessionId)
+
+  if (storage.getItem(ACTIVE_SESSION_KEY) === targetSessionId) {
+    storage.removeItem(ACTIVE_SESSION_KEY)
+  }
 }
 
 export function startNewStudySession(storage: StorageLike | null) {
@@ -91,14 +111,39 @@ export function startNewStudySession(storage: StorageLike | null) {
     return createSessionId()
   }
 
-  const currentSessionId = storage.getItem(ACTIVE_SESSION_KEY)
-  if (currentSessionId) {
-    removeStudySessionData(storage, currentSessionId)
-  }
+  clearStudySession(storage)
 
   const nextSessionId = createSessionId()
   storage.setItem(ACTIVE_SESSION_KEY, nextSessionId)
   return nextSessionId
+}
+
+export function isStudySessionResumable(storage: StorageLike | null, sessionId: string | null) {
+  if (!sessionId) {
+    return false
+  }
+
+  if (!storage) {
+    return true
+  }
+
+  if (readActiveStudySession(storage) !== sessionId) {
+    return false
+  }
+
+  return readFeedSessionSnapshot(storage, sessionId)?.status !== "ended"
+}
+
+export function isStudySessionEnded(storage: StorageLike | null, sessionId: string | null) {
+  if (!storage || !sessionId) {
+    return false
+  }
+
+  if (readActiveStudySession(storage) !== sessionId) {
+    return false
+  }
+
+  return readFeedSessionSnapshot(storage, sessionId)?.status === "ended"
 }
 
 export function readInteractionState(

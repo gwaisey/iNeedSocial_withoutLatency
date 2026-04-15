@@ -7,7 +7,6 @@ import {
   type ThemeMode,
 } from "../types/social"
 
-const BASE_URL = ""
 const VALID_GENRES = new Set<GenreKey>(GENRE_KEYS)
 
 export type FeedSource = "mock" | "api"
@@ -48,8 +47,14 @@ export function resolveFeedSource(value: string | undefined): FeedSource {
   return value === "api" ? "api" : "mock"
 }
 
+export function resolveFeedPath(path: string, baseUrl = import.meta.env.BASE_URL) {
+  const normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`
+  const normalizedPath = path.replace(/^\/+/, "")
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(resolveFeedPath(path), {
     headers: { "Content-Type": "application/json" },
     ...init,
   })
@@ -86,12 +91,12 @@ export function normalizeFeedPayload(theme: ThemeMode, payload: RawFeedPayload):
 }
 
 async function mockGetFeed(theme: ThemeMode): Promise<FeedPayload> {
-  const payload = validateFeedPayload(await apiFetch<unknown>("/content/feed.json"))
+  const payload = validateFeedPayload(await apiFetch<unknown>("content/feed.json"))
   return normalizeFeedPayload(theme, payload)
 }
 
 async function realGetFeed(theme: ThemeMode): Promise<FeedPayload> {
-  const payload = validateFeedPayload(await apiFetch<unknown>(`/api/feed?theme=${theme}`))
+  const payload = validateFeedPayload(await apiFetch<unknown>(`api/feed?theme=${theme}`))
   return normalizeFeedPayload(theme, payload)
 }
 

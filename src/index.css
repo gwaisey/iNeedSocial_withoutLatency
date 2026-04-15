@@ -34,6 +34,11 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+body.body-scroll-lock {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 button,
 input,
 textarea,

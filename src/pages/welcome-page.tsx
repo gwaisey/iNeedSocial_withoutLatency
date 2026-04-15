@@ -1,10 +1,20 @@
+import { useState } from "react"
 import { ChevronRight } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useStudyState } from "../context/study-context"
+import { getSessionStorage, isStudySessionResumable } from "../context/study-session-storage"
 
 export function WelcomePage() {
   const navigate = useNavigate()
-  const { startStudySession } = useStudyState()
+  const { sessionId, startStudySession } = useStudyState()
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+  const hasResumableSession = isStudySessionResumable(getSessionStorage(), sessionId)
+
+  const handleStartSession = () => {
+    setShowRestartConfirm(false)
+    startStudySession()
+    navigate("/feed?theme=light")
+  }
 
   return (
     <div className="min-h-svh flex items-center justify-center bg-app-radial p-6 animate-fade-in">
@@ -36,8 +46,12 @@ export function WelcomePage() {
               active:scale-95
             "
             onClick={() => {
-              startStudySession()
-              navigate("/feed?theme=light")
+              if (hasResumableSession) {
+                setShowRestartConfirm(true)
+                return
+              }
+
+              handleStartSession()
             }}
             type="button"
           >
@@ -45,6 +59,35 @@ export function WelcomePage() {
           </button>
         </div>
       </div>
+      {showRestartConfirm && (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/55 px-5">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-ink shadow-[0_28px_60px_rgba(0,0,0,0.3)]">
+            <h2 className="text-xl font-bold leading-tight">Mulai sesi baru?</h2>
+            <p className="mt-3 text-sm leading-relaxed text-haze">
+              Sesi sebelumnya belum selesai. Jika Anda melanjutkan, progres sesi sebelumnya akan
+              diganti dengan sesi baru.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                className="rounded-full px-4 py-2 text-sm font-semibold text-haze transition hover:bg-ink/5"
+                data-testid="restart-session-cancel-button"
+                onClick={() => setShowRestartConfirm(false)}
+                type="button"
+              >
+                Batal
+              </button>
+              <button
+                className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(18,17,25,0.18)] transition active:scale-95"
+                data-testid="restart-session-confirm-button"
+                onClick={handleStartSession}
+                type="button"
+              >
+                Mulai sesi baru
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -7,9 +7,16 @@ const SAVE_RETRY_DELAYS_MS = [150, 300] as const
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ""
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? ""
 
+type FeedSessionsSaveData = SessionReportPayload[] | null
+
+type FeedSessionsSaveError = Error | {
+  message?: string
+  status?: number
+} | null
+
 type SaveResponse = {
-  data: unknown
-  error: unknown
+  data: FeedSessionsSaveData
+  error: FeedSessionsSaveError
 }
 
 type SaveResponsePromise = PromiseLike<SaveResponse>
@@ -95,7 +102,7 @@ export async function saveSessionDataWithClient(
   client: FeedSessionsClient,
   payload: SessionReportPayload
 ) {
-  let lastError: unknown = null
+  let lastError: FeedSessionsSaveError = null
 
   for (let attempt = 0; attempt <= SAVE_RETRY_DELAYS_MS.length; attempt += 1) {
     const { data, error } = await client
@@ -120,15 +127,4 @@ export async function saveSessionDataWithClient(
 
 export async function saveSessionData(payload: SessionReportPayload) {
   return saveSessionDataWithClient(getSupabaseClient(), payload)
-}
-
-export async function downloadSelfReport(payload: SessionReportPayload) {
-  const XLSX = await import("xlsx")
-  const worksheet = XLSX.utils.json_to_sheet([payload])
-  const workbook = XLSX.utils.book_new()
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Sesi Saya")
-
-  const filename = `Laporan_Sesi_Saya_${new Date().toISOString().split("T")[0]}.xlsx`
-  XLSX.writeFile(workbook, filename)
 }

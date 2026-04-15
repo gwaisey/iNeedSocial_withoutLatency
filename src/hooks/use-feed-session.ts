@@ -1,18 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
-import {
-  getSessionStorage,
-  readFeedSessionSnapshot,
-  writeFeedSessionSnapshot,
-  type FeedSessionSnapshot,
-} from "../context/study-session-storage"
-import {
-  downloadSelfReport,
-  getSupabaseStatusMessage,
-  saveSessionData,
-} from "../services/supabase"
-import type { GenreKey, GenreTimes, Post, SessionReportPayload } from "../types/social"
-import { getUserFacingErrorMessage } from "../utils/error-utils"
-import { buildSessionReport, createEmptyGenreTimes } from "../utils/feed-session"
+import { useCallback, useEffect, useRef, type RefObject } from "react"
+import { getSupabaseStatusMessage } from "../services/supabase"
+import type { FeedSessionStatus } from "../context/study-session-storage"
+import type { Post } from "../types/social"
+import { createEmptyGenreTimes } from "../utils/feed-session"
+import { useFeedSessionActions } from "./use-feed-session-actions"
+import { useFeedSessionSnapshot } from "./use-feed-session-snapshot"
+import { useFeedTiming } from "./use-feed-timing"
 
 type ScrollContainerRef = RefObject<HTMLDivElement | null>
 type HeaderRef = RefObject<HTMLDivElement | null>
@@ -20,463 +13,146 @@ type HeaderRef = RefObject<HTMLDivElement | null>
 type UseFeedSessionArgs = {
   appVersion: string
   headerRef: HeaderRef
+  isPaused?: boolean
   posts: Post[] | null
   scrollRef: ScrollContainerRef
   studySessionId: string
 }
 
-type PersistSnapshotOptions = Partial<FeedSessionSnapshot> & {
+type PersistSessionOptions = {
   commitActivePost?: boolean
+  finalizedGenreTimes?: ReturnType<typeof useFeedTiming>["genreTimes"] | null
+  finalReport?: ReturnType<typeof useFeedSessionSnapshot>["finalReport"]
+  hasSubmitted?: boolean
+  status?: FeedSessionStatus
+  submissionHasError?: boolean
+  submissionMessage?: string | null
 }
-
-const REGULAR_POST_SELECTOR = "[data-regular-post-id]"
 
 export function useFeedSession({
   appVersion,
   headerRef,
+  isPaused = false,
   posts,
   scrollRef,
   studySessionId,
 }: UseFeedSessionArgs) {
-  const storageRef = useRef(getSessionStorage())
-  const studySessionIdRef = useRef(studySessionId)
-  const restoredSnapshotRef = useRef(
-    readFeedSessionSnapshot(storageRef.current, studySessionIdRef.current)
-  )
-  const restoredSnapshot = restoredSnapshotRef.current
-  const configMessage = getSupabaseStatusMessage()
+  const snapshot = useFeedSessionSnapshot({
+    configMessage: getSupabaseStatusMessage(),
+    studySessionId,
+  })
 
-  const [genreTimes, setGenreTimes] = useState<GenreTimes>(
-    () => restoredSnapshot?.genreTimes ?? createEmptyGenreTimes()
-  )
-  const [finalizedGenreTimes, setFinalizedGenreTimes] = useState<GenreTimes | null>(
-    () => restoredSnapshot?.finalizedGenreTimes ?? null
-  )
-  const [finalReport, setFinalReport] = useState<SessionReportPayload | null>(
-    () => restoredSnapshot?.finalReport ?? null
-  )
-  const [isTimerOpen, setIsTimerOpen] = useState(restoredSnapshot?.isTimerOpen ?? false)
-  const [isSavingSession, setIsSavingSession] = useState(false)
-  const [submissionMessage, setSubmissionMessage] = useState<string | null>(
-    restoredSnapshot?.submissionMessage ?? configMessage
-  )
-  const [submissionHasError, setSubmissionHasError] = useState(
-    restoredSnapshot?.submissionHasError ?? Boolean(configMessage)
-  )
-
-  const genreMapRef = useRef<Map<string, GenreKey>>(new Map())
-  const genreTimesRef = useRef<GenreTimes>(genreTimes)
-  const finalizedGenreTimesRef = useRef<GenreTimes | null>(finalizedGenreTimes)
-  const finalReportRef = useRef<SessionReportPayload | null>(finalReport)
-  const submissionMessageRef = useRef<string | null>(submissionMessage)
-  const submissionHasErrorRef = useRef(submissionHasError)
-  const isTimerOpenRef = useRef(isTimerOpen)
-  const activePostIdRef = useRef<string | null>(null)
-  const activePostStartedAtRef = useRef<number | null>(null)
-  const pendingActiveStartedAtRef = useRef<number | null>(null)
-  const evaluationFrameRef = useRef<number | null>(null)
-  const hasSubmittedRef = useRef(restoredSnapshot?.hasSubmitted ?? false)
-  const isSubmittingRef = useRef(false)
-
-  useEffect(() => {
-    genreTimesRef.current = genreTimes
-  }, [genreTimes])
-
-  useEffect(() => {
-    finalizedGenreTimesRef.current = finalizedGenreTimes
-  }, [finalizedGenreTimes])
-
-  useEffect(() => {
-    finalReportRef.current = finalReport
-  }, [finalReport])
-
-  useEffect(() => {
-    submissionMessageRef.current = submissionMessage
-  }, [submissionMessage])
-
-  useEffect(() => {
-    submissionHasErrorRef.current = submissionHasError
-  }, [submissionHasError])
-
-  useEffect(() => {
-    isTimerOpenRef.current = isTimerOpen
-  }, [isTimerOpen])
-
-  useEffect(() => {
-    genreMapRef.current = new Map((posts ?? []).map((post) => [post.id, post.genre] as const))
-
-    if (
-      posts &&
-      posts.length > 0 &&
-      !finalReportRef.current &&
-      !activePostIdRef.current &&
-      activePostStartedAtRef.current === null
-    ) {
-      pendingActiveStartedAtRef.current = Date.now()
-    }
-  }, [posts])
-
-  const commitActivePostDuration = useCallback((now = Date.now()) => {
-    const activePostId = activePostIdRef.current
-    const activePostStartedAt = activePostStartedAtRef.current
-
-    if (!activePostId || activePostStartedAt === null) {
-      return genreTimesRef.current
-    }
-
-    const genre = genreMapRef.current.get(activePostId)
-    if (!genre) {
-      activePostStartedAtRef.current = now
-      return genreTimesRef.current
-    }
-
-    const duration = Math.max(0, now - activePostStartedAt)
-    if (duration === 0) {
-      activePostStartedAtRef.current = now
-      return genreTimesRef.current
-    }
-
-    const nextGenreTimes = {
-      ...genreTimesRef.current,
-      [genre]: genreTimesRef.current[genre] + duration,
-    }
-
-    genreTimesRef.current = nextGenreTimes
-    activePostStartedAtRef.current = now
-    setGenreTimes(nextGenreTimes)
-
-    return nextGenreTimes
-  }, [])
+  const timing = useFeedTiming({
+    headerRef,
+    initialGenreTimes: snapshot.restoredSnapshot?.genreTimes ?? createEmptyGenreTimes(),
+    isLocked: Boolean(snapshot.finalReport),
+    isPaused,
+    posts,
+    scrollRef,
+  })
 
   const persistSessionSnapshot = useCallback(
-    (options: PersistSnapshotOptions = {}) => {
+    (options: PersistSessionOptions = {}) => {
       const nextGenreTimes = options.commitActivePost
-        ? commitActivePostDuration()
-        : (options.genreTimes ?? genreTimesRef.current)
-      const snapshot: FeedSessionSnapshot = {
+        ? timing.commitActivePostDuration()
+        : timing.genreTimesRef.current
+
+      return snapshot.persistSnapshot({
+        finalizedGenreTimes: options.finalizedGenreTimes,
+        finalReport: options.finalReport,
         genreTimes: nextGenreTimes,
-        finalizedGenreTimes:
-          options.finalizedGenreTimes ?? finalizedGenreTimesRef.current,
-        finalReport: options.finalReport ?? finalReportRef.current,
-        hasSubmitted: options.hasSubmitted ?? hasSubmittedRef.current,
-        isTimerOpen: options.isTimerOpen ?? isTimerOpenRef.current,
-        submissionHasError:
-          options.submissionHasError ?? submissionHasErrorRef.current,
-        submissionMessage: options.submissionMessage ?? submissionMessageRef.current,
-      }
-
-      writeFeedSessionSnapshot(
-        storageRef.current,
-        studySessionIdRef.current,
-        snapshot
-      )
-
-      return snapshot
+        hasSubmitted: options.hasSubmitted,
+        status: options.status,
+        submissionHasError: options.submissionHasError,
+        submissionMessage: options.submissionMessage,
+      })
     },
-    [commitActivePostDuration]
+    [snapshot, timing]
   )
-
-  const finalizeAttributedTiming = useCallback(() => {
-    const nextGenreTimes = commitActivePostDuration()
-    activePostIdRef.current = null
-    activePostStartedAtRef.current = null
-    pendingActiveStartedAtRef.current = null
-    return nextGenreTimes
-  }, [commitActivePostDuration])
-
-  const findDominantPostId = useCallback(() => {
-    const container = scrollRef.current
-    if (!container) {
-      return null
-    }
-
-    const containerRect = container.getBoundingClientRect()
-    const headerBottom = headerRef.current?.getBoundingClientRect().bottom ?? containerRect.top
-    const viewportTop = Math.max(containerRect.top, headerBottom)
-    const viewportBottom = containerRect.bottom
-    const postElements = container.querySelectorAll<HTMLElement>(REGULAR_POST_SELECTOR)
-
-    let bestPostId: string | null = null
-    let bestVisibleArea = 0
-    let bestTop = Number.POSITIVE_INFINITY
-
-    postElements.forEach((element) => {
-      const rect = element.getBoundingClientRect()
-      const visibleTop = Math.max(rect.top, viewportTop)
-      const visibleBottom = Math.min(rect.bottom, viewportBottom)
-      const visibleHeight = visibleBottom - visibleTop
-
-      if (visibleHeight <= 0) {
-        return
-      }
-
-      const visibleArea = visibleHeight * Math.max(rect.width, 1)
-      const postId = element.getAttribute("data-regular-post-id")
-      if (!postId) {
-        return
-      }
-
-      if (
-        visibleArea > bestVisibleArea ||
-        (visibleArea === bestVisibleArea && rect.top < bestTop)
-      ) {
-        bestPostId = postId
-        bestVisibleArea = visibleArea
-        bestTop = rect.top
-      }
-    })
-
-    return bestPostId
-  }, [headerRef, scrollRef])
-
-  const scheduleActivePostEvaluation = useCallback(() => {
-    if (!posts || finalReportRef.current) {
-      return
-    }
-
-    if (evaluationFrameRef.current !== null) {
-      return
-    }
-
-    evaluationFrameRef.current = window.requestAnimationFrame(() => {
-      evaluationFrameRef.current = null
-
-      const nextPostId = findDominantPostId()
-      if (!nextPostId) {
-        return
-      }
-
-      const currentPostId = activePostIdRef.current
-      if (currentPostId === nextPostId) {
-        return
-      }
-
-      const now = Date.now()
-
-      if (currentPostId) {
-        commitActivePostDuration(now)
-      }
-
-      activePostIdRef.current = nextPostId
-      activePostStartedAtRef.current = currentPostId
-        ? now
-        : pendingActiveStartedAtRef.current ?? now
-      pendingActiveStartedAtRef.current = null
-    })
-  }, [commitActivePostDuration, findDominantPostId, posts])
+  const persistOnUnmountRef = useRef(persistSessionSnapshot)
+  const hasFlushedLifecycleSnapshotRef = useRef(false)
 
   useEffect(() => {
-    if (!posts || finalReportRef.current) {
-      return
+    persistOnUnmountRef.current = persistSessionSnapshot
+  }, [persistSessionSnapshot])
+
+  const persistLifecycleSnapshot = useCallback(() => {
+    if (hasFlushedLifecycleSnapshotRef.current) {
+      return timing.genreTimesRef.current
     }
 
-    const container = scrollRef.current
-    if (!container) {
-      return
-    }
-
-    const handlePositionChange = () => {
-      scheduleActivePostEvaluation()
-    }
-
-    scheduleActivePostEvaluation()
-    container.addEventListener("scroll", handlePositionChange, { passive: true })
-    window.addEventListener("resize", handlePositionChange)
-
-    return () => {
-      container.removeEventListener("scroll", handlePositionChange)
-      window.removeEventListener("resize", handlePositionChange)
-
-      if (evaluationFrameRef.current !== null) {
-        window.cancelAnimationFrame(evaluationFrameRef.current)
-        evaluationFrameRef.current = null
-      }
-    }
-  }, [posts, scheduleActivePostEvaluation, scrollRef])
+    hasFlushedLifecycleSnapshotRef.current = true
+    return persistSessionSnapshot({ commitActivePost: true })
+  }, [persistSessionSnapshot, timing.genreTimesRef])
 
   useEffect(() => {
     persistSessionSnapshot()
   }, [
-    finalizedGenreTimes,
-    finalReport,
-    genreTimes,
-    isTimerOpen,
     persistSessionSnapshot,
-    submissionHasError,
-    submissionMessage,
+    snapshot.finalReport,
+    snapshot.finalizedGenreTimes,
+    snapshot.submissionHasError,
+    snapshot.submissionMessage,
+    timing.genreTimes,
   ])
 
   useEffect(() => {
     const handlePageHide = () => {
-      persistSessionSnapshot({ commitActivePost: true })
-      activePostIdRef.current = null
-      activePostStartedAtRef.current = null
-      pendingActiveStartedAtRef.current = null
+      persistLifecycleSnapshot()
+    }
+    const handlePageShow = () => {
+      hasFlushedLifecycleSnapshotRef.current = false
     }
 
     window.addEventListener("pagehide", handlePageHide)
-    return () => window.removeEventListener("pagehide", handlePageHide)
-  }, [persistSessionSnapshot])
+    window.addEventListener("pageshow", handlePageShow)
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide)
+      window.removeEventListener("pageshow", handlePageShow)
+    }
+  }, [persistLifecycleSnapshot])
 
   useEffect(() => {
     return () => {
-      persistSessionSnapshot({ commitActivePost: true })
+      if (hasFlushedLifecycleSnapshotRef.current) {
+        return
+      }
+
+      hasFlushedLifecycleSnapshotRef.current = true
+      persistOnUnmountRef.current({ commitActivePost: true })
     }
-  }, [persistSessionSnapshot])
+  }, [])
 
-  const openTimer = useCallback(async () => {
-    setIsTimerOpen(true)
-    isTimerOpenRef.current = true
-
-    const nextGenreTimes = finalReportRef.current
-      ? finalizedGenreTimesRef.current ?? genreTimesRef.current
-      : finalizeAttributedTiming()
-    const report =
-      finalReportRef.current ??
-      buildSessionReport(studySessionIdRef.current, nextGenreTimes, appVersion)
-
-    if (!finalReportRef.current) {
-      finalizedGenreTimesRef.current = nextGenreTimes
-      finalReportRef.current = report
-      setFinalizedGenreTimes(nextGenreTimes)
-      setFinalReport(report)
-    }
-
-    persistSessionSnapshot({
-      finalReport: report,
-      finalizedGenreTimes: nextGenreTimes,
-      genreTimes: nextGenreTimes,
-      isTimerOpen: true,
-    })
-
-    if (hasSubmittedRef.current || isSubmittingRef.current) {
-      return report
-    }
-
-    isSubmittingRef.current = true
-    setIsSavingSession(true)
-    setSubmissionHasError(false)
-    setSubmissionMessage("Menyimpan sesi...")
-    submissionHasErrorRef.current = false
-    submissionMessageRef.current = "Menyimpan sesi..."
-    persistSessionSnapshot({
-      finalReport: report,
-      finalizedGenreTimes: nextGenreTimes,
-      genreTimes: nextGenreTimes,
-      isTimerOpen: true,
-      submissionHasError: false,
-      submissionMessage: "Menyimpan sesi...",
-    })
-
-    try {
-      await saveSessionData(report)
-      hasSubmittedRef.current = true
-      setSubmissionHasError(false)
-      setSubmissionMessage("Sesi berhasil disimpan.")
-      submissionHasErrorRef.current = false
-      submissionMessageRef.current = "Sesi berhasil disimpan."
-      persistSessionSnapshot({
-        finalReport: report,
-        finalizedGenreTimes: nextGenreTimes,
-        genreTimes: nextGenreTimes,
-        hasSubmitted: true,
-        isTimerOpen: true,
-        submissionHasError: false,
-        submissionMessage: "Sesi berhasil disimpan.",
-      })
-    } catch (error) {
-      const nextMessage = getUserFacingErrorMessage(
-        error,
-        "Sesi tidak dapat disimpan.",
-        "feed-session:save"
-      )
-
-      setSubmissionHasError(true)
-      setSubmissionMessage(nextMessage)
-      submissionHasErrorRef.current = true
-      submissionMessageRef.current = nextMessage
-      persistSessionSnapshot({
-        finalReport: report,
-        finalizedGenreTimes: nextGenreTimes,
-        genreTimes: nextGenreTimes,
-        hasSubmitted: false,
-        isTimerOpen: true,
-        submissionHasError: true,
-        submissionMessage: nextMessage,
-      })
-    } finally {
-      isSubmittingRef.current = false
-      setIsSavingSession(false)
-    }
-
-    return report
-  }, [appVersion, finalizeAttributedTiming, persistSessionSnapshot])
-
-  const closeTimerOverlay = useCallback(() => {
-    setIsTimerOpen(false)
-    isTimerOpenRef.current = false
-    persistSessionSnapshot({ isTimerOpen: false })
-  }, [persistSessionSnapshot])
-
-  const downloadReport = useCallback(async () => {
-    const nextGenreTimes = finalReportRef.current
-      ? finalizedGenreTimesRef.current ?? genreTimesRef.current
-      : finalizeAttributedTiming()
-    const report =
-      finalReportRef.current ??
-      buildSessionReport(studySessionIdRef.current, nextGenreTimes, appVersion)
-
-    if (!finalReportRef.current) {
-      finalizedGenreTimesRef.current = nextGenreTimes
-      finalReportRef.current = report
-      setFinalizedGenreTimes(nextGenreTimes)
-      setFinalReport(report)
-    }
-
-    persistSessionSnapshot({
-      finalReport: report,
-      finalizedGenreTimes: nextGenreTimes,
-      genreTimes: nextGenreTimes,
-      isTimerOpen: isTimerOpenRef.current,
-    })
-
-    try {
-      await downloadSelfReport(report)
-    } catch (error) {
-      const nextMessage = getUserFacingErrorMessage(
-        error,
-        "Gagal mengekspor laporan.",
-        "feed-session:export"
-      )
-
-      setSubmissionHasError(true)
-      setSubmissionMessage(nextMessage)
-      submissionHasErrorRef.current = true
-      submissionMessageRef.current = nextMessage
-      persistSessionSnapshot({
-        finalReport: report,
-        finalizedGenreTimes: nextGenreTimes,
-        genreTimes: nextGenreTimes,
-        isTimerOpen: isTimerOpenRef.current,
-        submissionHasError: true,
-        submissionMessage: nextMessage,
-      })
-    }
-  }, [appVersion, finalizeAttributedTiming, persistSessionSnapshot])
+  const actions = useFeedSessionActions({
+    appVersion,
+    finalReportRef: snapshot.finalReportRef,
+    finalizeAttributedTiming: timing.finalizeAttributedTiming,
+    finalizedGenreTimesRef: snapshot.finalizedGenreTimesRef,
+    genreTimesRef: timing.genreTimesRef,
+    hasSubmittedRef: snapshot.hasSubmittedRef,
+    sessionStatusRef: snapshot.sessionStatusRef,
+    persistSessionSnapshot: (options) => snapshot.persistSnapshot(options),
+    setFinalReport: snapshot.setFinalReport,
+    setFinalizedGenreTimes: snapshot.setFinalizedGenreTimes,
+    setSessionStatus: snapshot.setSessionStatus,
+    setSubmissionHasError: snapshot.setSubmissionHasError,
+    setSubmissionMessage: snapshot.setSubmissionMessage,
+    studySessionId,
+    submissionHasErrorRef: snapshot.submissionHasErrorRef,
+    submissionMessageRef: snapshot.submissionMessageRef,
+  })
 
   return {
-    closeTimerOverlay,
-    commitActivePostDuration,
-    downloadReport,
-    finalReport,
-    finalizedGenreTimes,
-    genreTimes,
-    isSavingSession,
-    isTimerOpen,
-    openTimer,
+    commitActivePostDuration: timing.commitActivePostDuration,
+    discardSessionSnapshot: snapshot.discardSnapshot,
+    endSession: actions.endSession,
+    finalReport: snapshot.finalReport,
+    finalizedGenreTimes: snapshot.finalizedGenreTimes,
+    genreTimes: timing.genreTimes,
+    isSavingSession: actions.isSavingSession,
     persistSessionSnapshot,
-    scheduleActivePostEvaluation,
-    submissionHasError,
-    submissionMessage,
+    scheduleActivePostEvaluation: timing.scheduleActivePostEvaluation,
+    submissionHasError: snapshot.submissionHasError,
+    submissionMessage: snapshot.submissionMessage,
   }
 }

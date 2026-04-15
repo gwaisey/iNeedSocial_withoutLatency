@@ -1,46 +1,49 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import React, { useRef, useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import { BrandLogo } from "../components/brand-logo"
 import { CommentSheet } from "../components/comment-sheet"
+import {
+  ExitSessionDialog,
+  FeedErrorState,
+  FeedSkeleton,
+  RevealPost,
+} from "../components/feed/feed-page-ui"
 import { FeedPost } from "../components/feed-post"
 import { RightPanel } from "../components/layout/RightPanel"
 import { Sidebar } from "../components/layout/Sidebar"
-import { TimerSummaryOverlay } from "../components/timer-summary-overlay"
 import { ThemeToggle } from "../components/theme-toggle"
+import { TutorialDelayBlocker } from "../components/tutorial/TutorialDelayBlocker"
 import { TutorialOverlay } from "../components/tutorial/TutorialOverlay"
 import { useStudyState } from "../context/study-context"
-import { getSessionStorage, readTutorialState } from "../context/study-session-storage"
+import { useFeedLoader } from "../hooks/use-feed-loader"
 import { useFeedSession } from "../hooks/use-feed-session"
-import { socialFeedService } from "../services/feed-service"
-import { getUserFacingErrorMessage } from "../utils/error-utils"
+import { useFeedPageActions } from "../hooks/use-feed-page-actions"
+import { useFeedThemeScroll } from "../hooks/use-feed-theme-scroll"
+import { useFeedTutorialVisibility } from "../hooks/use-feed-tutorial-visibility"
+import { useParticipantShellTutorialLock } from "../hooks/use-participant-shell-tutorial-lock"
 import {
-  type FeedPayload,
   type ThemeMode,
 } from "../types/social"
 
 const APP_VERSION = "without_latency"
-const REGULAR_POST_SELECTOR = "[data-regular-post-id]"
 
-type ScrollAnchor = {
-  postId: string
-  offset: number
+function resolveThemeMode(search: string): ThemeMode {
+  const params = new URLSearchParams(search)
+  return params.get("theme") === "dark" ? "dark" : "light"
 }
 
 export function FeedPage() {
+  const location = useLocation()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [payload, setPayload] = useState<FeedPayload | null>(null)
-  const [showTutorial, setShowTutorial] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [feedError, setFeedError] = useState<string | null>(null)
-  const [feedRequestKey, setFeedRequestKey] = useState(0)
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false)
 
+  const participantShellRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
-  const pendingScrollAnchorRef = useRef<ScrollAnchor | null>(null)
 
   const {
     commentSheet,
+    discardStudySession,
     likedPosts,
     repostedPosts,
     sessionId,
@@ -50,169 +53,53 @@ export function FeedPage() {
     toggleReposted,
   } = useStudyState()
 
-  const themeMode: ThemeMode =
-    searchParams.get("theme") === "dark" ? "dark" : "light"
+  const themeMode = resolveThemeMode(location.search)
   const isDark = themeMode === "dark"
+  const { feedError, isLoading, payload, retryFeed } = useFeedLoader({ themeMode })
+  const { hideTutorial, isTutorialBlocking, showTutorial, showTutorialDelayBlocker } =
+    useFeedTutorialVisibility({
+      feedError,
+      payload,
+      sessionId,
+    })
   const {
-    closeTimerOverlay,
-    downloadReport,
-    finalReport,
-    finalizedGenreTimes,
-    genreTimes,
+    discardSessionSnapshot,
+    endSession,
     isSavingSession,
-    isTimerOpen,
-    openTimer,
     persistSessionSnapshot,
     scheduleActivePostEvaluation,
-    submissionHasError,
-    submissionMessage,
   } = useFeedSession({
     appVersion: APP_VERSION,
     headerRef,
+    isPaused: isTutorialBlocking,
     posts: payload?.posts ?? null,
     scrollRef,
-    studySessionId: sessionId,
+    studySessionId: sessionId ?? "",
+  })
+  const { captureThemeToggleScrollState } = useFeedThemeScroll({
+    isFeedReady: Boolean(payload) && !isLoading && !feedError,
+    scheduleActivePostEvaluation,
+    scrollRef,
+    themeMode,
+  })
+  const isTutorialUiActive = showTutorialDelayBlocker || showTutorial
+
+  useParticipantShellTutorialLock({
+    isLocked: isTutorialUiActive,
+    participantShellRef,
   })
 
-  const captureScrollAnchor = useCallback((): ScrollAnchor | null => {
-    const container = scrollRef.current
-    if (!container) {
-      return null
-    }
-
-    const containerRect = container.getBoundingClientRect()
-    const postElements = container.querySelectorAll<HTMLElement>(REGULAR_POST_SELECTOR)
-
-    for (const element of postElements) {
-      const rect = element.getBoundingClientRect()
-      const isVisible = rect.bottom > containerRect.top && rect.top < containerRect.bottom
-
-      if (!isVisible) {
-        continue
-      }
-
-      const postId = element.getAttribute("data-regular-post-id")
-      if (!postId) {
-        continue
-      }
-
-      return {
-        postId,
-        offset: rect.top - containerRect.top,
-      }
-    }
-
-    return null
-  }, [])
-
-  const handleOpenTimer = useCallback(async () => {
-    await openTimer()
-  }, [openTimer])
-
-  const handleSelfDownload = useCallback(async () => {
-    await downloadReport()
-  }, [downloadReport])
-
-  useEffect(() => {
-    let active = true
-
-    async function loadFeed() {
-      setIsLoading(true)
-      setFeedError(null)
-      setPayload(null)
-
-      try {
-        const nextPayload = await socialFeedService.getFeedByTheme(themeMode)
-        if (!active) {
-          return
-        }
-
-        setPayload(nextPayload)
-      } catch (error) {
-        if (!active) {
-          return
-        }
-
-        setFeedError(
-          getUserFacingErrorMessage(error, "Feed tidak dapat dimuat.", "feed-page:load")
-        )
-      } finally {
-        if (active) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    void loadFeed()
-
-    return () => {
-      active = false
-    }
-  }, [feedRequestKey, themeMode])
-
-  useEffect(() => {
-    if (!payload) {
-      return
-    }
-
-    const tutorialState = readTutorialState(getSessionStorage(), sessionId)
-    if (tutorialState.completed) {
-      setShowTutorial(false)
-      return
-    }
-
-    const timeoutId = window.setTimeout(() => setShowTutorial(true), 350)
-    return () => window.clearTimeout(timeoutId)
-  }, [payload, sessionId])
-
-  useLayoutEffect(() => {
-    const anchor = pendingScrollAnchorRef.current
-    const container = scrollRef.current
-
-    if (!anchor || !container || !payload) {
-      return
-    }
-
-    const element = container.querySelector<HTMLElement>(
-      `[data-regular-post-id="${anchor.postId}"]`
-    )
-    pendingScrollAnchorRef.current = null
-
-    if (!element) {
-      return
-    }
-
-    const containerRect = container.getBoundingClientRect()
-    const elementRect = element.getBoundingClientRect()
-    const delta = elementRect.top - containerRect.top - anchor.offset
-
-    if (delta !== 0) {
-      container.scrollTop += delta
-    }
-
-    scheduleActivePostEvaluation()
-  }, [payload, scheduleActivePostEvaluation, themeMode])
-
-  useEffect(() => {
-    const handler = () => {
-      void handleOpenTimer()
-    }
-
-    window.addEventListener("timeropen", handler)
-    return () => window.removeEventListener("timeropen", handler)
-  }, [handleOpenTimer])
-
-  const handleThemeToggle = () => {
-    pendingScrollAnchorRef.current = captureScrollAnchor()
-    persistSessionSnapshot({
-      commitActivePost: true,
-      isTimerOpen,
-    })
-    closeCommentSheet()
-    setSearchParams({ theme: isDark ? "light" : "dark" })
-  }
-
-  const retryFeed = () => setFeedRequestKey((current) => current + 1)
+  const { handleConfirmExitSession, handleEndSession, handleThemeToggle } = useFeedPageActions({
+    captureThemeToggleScrollState,
+    closeCommentSheet,
+    discardSessionSnapshot,
+    discardStudySession,
+    endSession,
+    isDark,
+    location,
+    navigate,
+    persistSessionSnapshot,
+  })
 
   const bgClass = isDark ? "bg-page-dark" : "bg-page-light"
   const textColor = isDark ? "text-white" : "text-ink"
@@ -221,246 +108,144 @@ export function FeedPage() {
 
   return (
     <div className={`app-shell ${isDark ? "theme-dark" : ""}`}>
-      <Sidebar theme={themeMode} />
-
-      <main
-        ref={scrollRef}
-        className={`main-content no-scrollbar ${bgClass} ${textColor}`}
-      >
-        <div
-          ref={headerRef}
-          className={`sticky top-0 z-40 flex items-center px-4 py-3 border-b backdrop-blur-sm ${borderCls} ${
-            isDark ? "bg-ink/90" : "bg-mist/90"
-          }`}
-        >
-          <div className="w-[42px] lg:hidden shrink-0" />
-          <div className="flex-1 flex justify-center lg:invisible">
-            <BrandLogo color={isDark ? "#F5F4FB" : "#27262F"} width={60} />
-          </div>
-          <ThemeToggle isDark={isDark} onClick={handleThemeToggle} />
-        </div>
-
-        <div className="feed-wrapper">
-          {isLoading && <FeedSkeleton isDark={isDark} />}
-
-          {!isLoading && feedError && (
-            <FeedErrorState
-              isDark={isDark}
-              message={feedError}
-              onRetry={retryFeed}
-            />
-          )}
-
-          {payload && !isLoading && !feedError && (
-            <div className={`divide-y ${dividerCls}`}>
-              {payload.posts.map((post, index) => (
-                <div
-                  key={`${post.id}-${index}`}
-                  data-post-id={post.id}
-                  data-regular-post-id={post.id}
-                >
-                  <RevealPost
-                    isDark={isDark}
-                    tutorialId={!isDark && index === 0 ? "tutorial-post" : undefined}
-                  >
-                    <FeedPost
-                      isDark={isDark}
-                      isLiked={Boolean(likedPosts[post.id])}
-                      isReposted={Boolean(repostedPosts[post.id])}
-                      onComment={() => openCommentSheet(post.id)}
-                      onLike={() => toggleLiked(post.id)}
-                      onRepost={() => toggleReposted(post.id)}
-                      post={post}
-                    />
-                  </RevealPost>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {payload && !isLoading && !feedError && (
-            <div className={`flex flex-col items-center gap-3 py-10 border-t ${borderCls}`}>
-              <p
-                className={`text-[11px] font-medium tracking-widest uppercase ${
-                  isDark ? "text-white/35" : "text-ink/35"
-                }`}
-              >
-                Sudah selesai melihat feed?
-              </p>
-              <button
-                aria-label="Buka ringkasan waktu"
-                data-testid="timer-open-button"
-                className="
-                  flex h-14 w-14 items-center justify-center rounded-full
-                  bg-white shadow-[0_8px_24px_rgba(18,17,25,0.16)]
-                  active:scale-95 transition-transform
-                "
-                onClick={() => {
-                  void handleOpenTimer()
-                }}
-                type="button"
-              >
-                <BrandLogo color="#27262F" width={32} />
-              </button>
-            </div>
-          )}
-        </div>
-      </main>
-
-      <RightPanel theme={themeMode} />
-
-      <button
-        aria-label="Lihat ringkasan waktu"
-        data-testid="timer-open-button-mobile"
-        className="
-          md:hidden fixed left-1/2 -translate-x-1/2 z-50
-          flex h-14 w-14 items-center justify-center rounded-full
-          bg-white shadow-[0_8px_28px_rgba(18,17,25,0.22)]
-          active:scale-90 transition-transform
-        "
-        onClick={() => {
-          void handleOpenTimer()
-        }}
-        style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
-        type="button"
-      >
-        <BrandLogo color="#27262F" width={30} />
-      </button>
-
-      {isTimerOpen && (
-        <TimerSummaryOverlay
-          finalReport={finalReport}
-          genreTimes={finalizedGenreTimes ?? genreTimes}
-          isSavingSession={isSavingSession}
-          onDownload={() => {
-            void handleSelfDownload()
-          }}
-          onFinish={() => {
-            closeTimerOverlay()
-            navigate("/thank-you")
-          }}
-          submissionHasError={submissionHasError}
-          submissionMessage={submissionMessage}
-        />
-      )}
-
-      {commentSheet && <CommentSheet onClose={closeCommentSheet} />}
-      {showTutorial && <TutorialOverlay onDone={() => setShowTutorial(false)} />}
-    </div>
-  )
-}
-
-function FeedErrorState({
-  isDark,
-  message,
-  onRetry,
-}: {
-  readonly isDark: boolean
-  readonly message: string
-  readonly onRetry: () => void
-}) {
-  return (
-    <div className={`px-4 py-10 ${isDark ? "text-white" : "text-ink"}`}>
       <div
-        className={`rounded-3xl border px-5 py-6 text-center ${
-          isDark ? "border-white/10 bg-white/5" : "border-ink/8 bg-white"
-        }`}
+        ref={participantShellRef}
+        className="flex h-full w-full"
+        data-testid="participant-shell"
       >
-        <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-ink"}`}>
-          Feed tidak dapat dimuat.
-        </p>
-        <p className={`mt-2 text-sm leading-relaxed ${isDark ? "text-white/70" : "text-haze"}`}>
-          {message}
-        </p>
+        <Sidebar
+          isEndingSession={isSavingSession}
+          onEndSession={() => {
+            void handleEndSession()
+          }}
+          onExitSession={() => setIsExitConfirmOpen(true)}
+          theme={themeMode}
+        />
+
+        <main
+          ref={scrollRef}
+          className={`main-content no-scrollbar ${bgClass} ${textColor}`}
+          data-testid="feed-scroll-container"
+        >
+          <div
+            ref={headerRef}
+            className={`sticky top-0 z-40 flex items-center px-4 py-3 border-b backdrop-blur-sm ${borderCls} ${
+              isDark ? "bg-ink/90" : "bg-mist/90"
+            }`}
+          >
+            <div className="w-[42px] lg:hidden shrink-0" />
+            <div className="flex-1 flex justify-center lg:invisible">
+              <BrandLogo color={isDark ? "#F5F4FB" : "#27262F"} width={60} />
+            </div>
+            <ThemeToggle isDark={isDark} onClick={handleThemeToggle} />
+          </div>
+
+          <div className="feed-wrapper">
+            {isLoading && <FeedSkeleton isDark={isDark} />}
+
+            {!isLoading && feedError && (
+              <FeedErrorState
+                isDark={isDark}
+                message={feedError}
+                onRetry={retryFeed}
+              />
+            )}
+
+            {payload && !isLoading && !feedError && (
+              <div className={`divide-y ${dividerCls}`}>
+                {payload.posts.map((post, index) => (
+                  <div
+                    key={`${post.id}-${index}`}
+                    data-post-id={post.id}
+                    data-regular-post-id={post.id}
+                  >
+                    <RevealPost
+                      isDark={isDark}
+                      tutorialId={!isDark && index === 0 ? "tutorial-post" : undefined}
+                    >
+                      <FeedPost
+                        isDark={isDark}
+                        isLiked={Boolean(likedPosts[post.id])}
+                        isReposted={Boolean(repostedPosts[post.id])}
+                        onComment={() => openCommentSheet(post.id)}
+                        onLike={() => toggleLiked(post.id)}
+                        onRepost={() => toggleReposted(post.id)}
+                        post={post}
+                      />
+                    </RevealPost>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {payload && !isLoading && !feedError && (
+              <div className={`flex flex-col items-center gap-3 py-10 border-t ${borderCls}`}>
+                <p
+                  className={`text-[11px] font-medium tracking-widest uppercase ${
+                    isDark ? "text-white/35" : "text-ink/35"
+                  }`}
+                >
+                  Sudah selesai melihat feed?
+                </p>
+                <button
+                  aria-label="Akhiri sesi"
+                  data-testid="timer-open-button"
+                  className="
+                    flex h-14 w-14 items-center justify-center rounded-full
+                    bg-white shadow-[0_8px_24px_rgba(18,17,25,0.16)]
+                    active:scale-95 transition-transform disabled:opacity-70
+                  "
+                  disabled={isSavingSession}
+                  onClick={() => {
+                    void handleEndSession()
+                  }}
+                  type="button"
+                >
+                  <BrandLogo color="#27262F" width={32} />
+                </button>
+              </div>
+            )}
+          </div>
+        </main>
+
+        <RightPanel theme={themeMode} />
+
         <button
-          className="mt-5 inline-flex items-center justify-center rounded-full bg-violet px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(119,109,255,0.35)] active:scale-95 transition-transform"
-          data-testid="feed-error-retry"
-          onClick={onRetry}
+          aria-label="Akhiri sesi"
+          data-testid="timer-open-button-mobile"
+          className="
+            md:hidden fixed left-1/2 -translate-x-1/2 z-50
+            flex h-14 w-14 items-center justify-center rounded-full
+            bg-white shadow-[0_8px_28px_rgba(18,17,25,0.22)]
+            active:scale-90 transition-transform disabled:opacity-70
+          "
+          disabled={isSavingSession}
+          onClick={() => {
+            void handleEndSession()
+          }}
+          style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
           type="button"
         >
-          Coba Lagi
+          <BrandLogo color="#27262F" width={30} />
         </button>
+
+        {commentSheet && <CommentSheet onClose={closeCommentSheet} />}
+        {isExitConfirmOpen && (
+          <ExitSessionDialog
+            onCancel={() => setIsExitConfirmOpen(false)}
+            onConfirm={handleConfirmExitSession}
+          />
+        )}
       </div>
-    </div>
-  )
-}
-
-function SinglePostSkeleton({ isDark }: { isDark: boolean }) {
-  const skeletonClass = isDark ? "bg-white/10" : "bg-ink/8"
-
-  return (
-    <div>
-      <div className="flex items-center gap-3 px-3 py-3">
-        <div className={`h-9 w-9 rounded-full animate-pulse ${skeletonClass}`} />
-        <div className="space-y-1.5 flex-1">
-          <div className={`h-3 w-24 rounded-full animate-pulse ${skeletonClass}`} />
-          <div className={`h-2.5 w-14 rounded-full animate-pulse ${skeletonClass}`} />
-        </div>
-      </div>
-      <div className={`w-full aspect-[4/5] animate-pulse ${skeletonClass}`} />
-      <div className="flex items-center gap-3 px-3 py-2">
-        <div className={`h-5 w-12 rounded-full animate-pulse ${skeletonClass}`} />
-        <div className={`h-5 w-12 rounded-full animate-pulse ${skeletonClass}`} />
-        <div className={`h-5 w-8 rounded-full animate-pulse ${skeletonClass}`} />
-      </div>
-      <div className="px-3 py-3 space-y-2">
-        <div className={`h-3 w-20 rounded-full animate-pulse ${skeletonClass}`} />
-        <div className={`h-3 w-48 rounded-full animate-pulse ${skeletonClass}`} />
-      </div>
-    </div>
-  )
-}
-
-function FeedSkeleton({ isDark }: { isDark: boolean }) {
-  return (
-    <div className={`divide-y ${isDark ? "divide-white/8" : "divide-ink/6"}`}>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <SinglePostSkeleton key={index} isDark={isDark} />
-      ))}
-    </div>
-  )
-}
-
-function RevealPost({
-  children,
-  isDark,
-  tutorialId,
-}: {
-  children: React.ReactNode
-  isDark: boolean
-  tutorialId?: string
-}) {
-  const [revealed, setRevealed] = useState(false)
-  const ref = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (revealed) {
-      return
-    }
-
-    const element = ref.current
-    if (!element) {
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setRevealed(true)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    observer.observe(element)
-
-    return () => observer.disconnect()
-  }, [revealed])
-
-  return (
-    <div ref={ref} {...(tutorialId ? { "data-tutorial-id": tutorialId } : {})}>
-      {revealed ? children : <SinglePostSkeleton isDark={isDark} />}
+      {showTutorialDelayBlocker && <TutorialDelayBlocker isDark={isDark} />}
+      {showTutorial && (
+        <TutorialOverlay
+          onDone={() => {
+            hideTutorial()
+            scheduleActivePostEvaluation()
+          }}
+        />
+      )}
     </div>
   )
 }
