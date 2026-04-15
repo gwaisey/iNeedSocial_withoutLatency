@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, type RefObject } from "react"
 import type { ThemeMode } from "../types/social"
 
 type ScrollContainerRef = RefObject<HTMLDivElement | null>
+type HeaderRef = RefObject<HTMLDivElement | null>
 
 type FeedScrollAnchor = {
   postId: string
@@ -15,6 +16,7 @@ type FeedScrollState = {
 }
 
 type UseFeedThemeScrollArgs = {
+  headerRef: HeaderRef
   isFeedReady: boolean
   scheduleActivePostEvaluation: () => void
   scrollRef: ScrollContainerRef
@@ -24,12 +26,30 @@ type UseFeedThemeScrollArgs = {
 const REGULAR_POST_SELECTOR = "[data-regular-post-id]"
 
 export function useFeedThemeScroll({
+  headerRef,
   isFeedReady,
   scheduleActivePostEvaluation,
   scrollRef,
   themeMode,
 }: UseFeedThemeScrollArgs) {
   const pendingScrollStateRef = useRef<FeedScrollState | null>(null)
+
+  const getViewportMetrics = useCallback(() => {
+    const container = scrollRef.current
+    if (!container) {
+      return null
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const headerHeight = headerRef.current?.getBoundingClientRect().height ?? 0
+
+    return {
+      container,
+      containerRect,
+      viewportBottom: containerRect.bottom,
+      viewportTop: containerRect.top + headerHeight,
+    }
+  }, [headerRef, scrollRef])
 
   const findRegularPostElement = useCallback((postId: string) => {
     const container = scrollRef.current
@@ -48,17 +68,17 @@ export function useFeedThemeScroll({
   }, [scrollRef])
 
   const captureScrollAnchor = useCallback((): FeedScrollAnchor | null => {
-    const container = scrollRef.current
-    if (!container) {
+    const viewportMetrics = getViewportMetrics()
+    if (!viewportMetrics) {
       return null
     }
 
-    const containerRect = container.getBoundingClientRect()
+    const { container, viewportBottom, viewportTop } = viewportMetrics
     const postElements = container.querySelectorAll<HTMLElement>(REGULAR_POST_SELECTOR)
 
     for (const element of postElements) {
       const rect = element.getBoundingClientRect()
-      const isVisible = rect.bottom > containerRect.top && rect.top < containerRect.bottom
+      const isVisible = rect.bottom > viewportTop && rect.top < viewportBottom
 
       if (!isVisible) {
         continue
@@ -71,12 +91,12 @@ export function useFeedThemeScroll({
 
       return {
         postId,
-        offset: rect.top - containerRect.top,
+        offset: rect.top - viewportTop,
       }
     }
 
     return null
-  }, [scrollRef])
+  }, [getViewportMetrics])
 
   const captureScrollState = useCallback((): FeedScrollState | null => {
     const container = scrollRef.current
@@ -105,9 +125,13 @@ export function useFeedThemeScroll({
       if (scrollState.anchor) {
         const element = findRegularPostElement(scrollState.anchor.postId)
         if (element) {
-          const containerRect = container.getBoundingClientRect()
+          const viewportMetrics = getViewportMetrics()
+          if (!viewportMetrics) {
+            return false
+          }
+
           const elementRect = element.getBoundingClientRect()
-          const delta = elementRect.top - containerRect.top - scrollState.anchor.offset
+          const delta = elementRect.top - viewportMetrics.viewportTop - scrollState.anchor.offset
 
           if (Math.abs(delta) > 0.5) {
             container.scrollTop += delta
@@ -123,7 +147,7 @@ export function useFeedThemeScroll({
 
       return true
     },
-    [findRegularPostElement, scrollRef]
+    [findRegularPostElement, getViewportMetrics, scrollRef]
   )
 
   useLayoutEffect(() => {
@@ -147,10 +171,15 @@ export function useFeedThemeScroll({
       restoreScrollState(scrollState, true)
       scheduleActivePostEvaluation()
     }, 160)
+    const lateTimeoutId = window.setTimeout(() => {
+      restoreScrollState(scrollState, true)
+      scheduleActivePostEvaluation()
+    }, 360)
 
     return () => {
       window.cancelAnimationFrame(animationFrame)
       window.clearTimeout(timeoutId)
+      window.clearTimeout(lateTimeoutId)
     }
   }, [
     isFeedReady,

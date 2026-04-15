@@ -505,7 +505,6 @@ test("tutorial delay blocker drops on feed error and returns on retry success", 
   expect(
     await page.getByTestId("participant-shell").evaluate((element) => (element as HTMLElement).inert)
   ).toBe(true)
-  await expect(page.getByTestId("tutorial-skip-button")).toHaveCount(0)
   await page.getByTestId("tutorial-skip-button").waitFor({ state: "visible" })
   await expect(page.getByTestId("tutorial-next-button")).toBeFocused()
   await expect(page.getByTestId("tutorial-delay-blocker")).toHaveCount(0)
@@ -533,17 +532,37 @@ test("theme switch keeps the anchored feed position and does not add browser his
       return element.scrollTop >= lowerBound && element.scrollTop <= upperBound
     },
     {
-      lowerBound: scrollTopBeforeToggle - 280,
-      upperBound: scrollTopBeforeToggle + 280,
+      lowerBound: scrollTopBeforeToggle - 180,
+      upperBound: scrollTopBeforeToggle + 180,
     }
   )
 
   await expect(page.locator(".app-shell")).toHaveClass(/theme-dark/)
   await expect(page.getByTestId("theme-toggle-button")).toHaveClass(/justify-start/)
-  expect(Math.abs((await getFeedScrollTop(page)) - scrollTopBeforeToggle)).toBeLessThan(280)
+  expect(Math.abs((await getFeedScrollTop(page)) - scrollTopBeforeToggle)).toBeLessThan(180)
 
   await page.goBack()
   await page.waitForURL("**/welcome")
+})
+
+test("theme switch preserves carousel slide state", async ({ page }) => {
+  await startStudy(page)
+  await dismissTutorialIfVisible(page)
+
+  await setFeedScrollTop(page, 1_050)
+  await waitForFeedScrollTopAtLeast(page, 650)
+
+  const carouselIndicator = page.getByTestId("carousel-indicator-post-carousel")
+  await expect(carouselIndicator).toBeVisible()
+  await page.getByTestId("carousel-next-post-carousel").click()
+  await expect(carouselIndicator).toHaveText("2/3")
+
+  const scrollTopBeforeToggle = await getFeedScrollTop(page)
+  await page.getByTestId("theme-toggle-button").click()
+  await page.waitForURL("**/feed?theme=dark")
+
+  await expect(carouselIndicator).toHaveText("2/3")
+  expect(Math.abs((await getFeedScrollTop(page)) - scrollTopBeforeToggle)).toBeLessThan(180)
 })
 
 test("keluar clears a seeded session and forces a fresh restart", async ({ page }) => {

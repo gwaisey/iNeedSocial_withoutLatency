@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react"
+import React from "react"
 
 export function ExitSessionDialog({
   onCancel,
@@ -110,44 +110,17 @@ export function FeedSkeleton({ isDark }: { isDark: boolean }) {
 
 export function RevealPost({
   children,
-  isDark,
   tutorialId,
 }: {
   readonly children: React.ReactNode
-  readonly isDark: boolean
   readonly tutorialId?: string
 }) {
-  const [revealed, setRevealed] = useState(false)
-  const ref = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (revealed) {
-      return
-    }
-
-    const element = ref.current
-    if (!element) {
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setRevealed(true)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    observer.observe(element)
-
-    return () => observer.disconnect()
-  }, [revealed])
-
   return (
-    <div ref={ref} {...(tutorialId ? { "data-tutorial-id": tutorialId } : {})}>
-      {revealed ? children : <SinglePostSkeleton isDark={isDark} />}
+    <div
+      className="feed-post-shell"
+      {...(tutorialId ? { "data-tutorial-id": tutorialId } : {})}
+    >
+      {children}
     </div>
   )
 }

@@ -146,6 +146,11 @@ img {
   width: 100%;
 }
 
+.feed-post-shell {
+  content-visibility: auto;
+  contain-intrinsic-size: 960px;
+}
+
 @media (min-width: 768px) {
   .feed-wrapper {
     max-width: 470px;

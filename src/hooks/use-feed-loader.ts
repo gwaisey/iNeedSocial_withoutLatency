@@ -19,7 +19,6 @@ export function useFeedLoader({ themeMode }: UseFeedLoaderArgs) {
     async function loadFeed() {
       setIsLoading(true)
       setFeedError(null)
-      setPayload(null)
 
       try {
         const nextPayload = await socialFeedService.getFeedByTheme(themeMode)

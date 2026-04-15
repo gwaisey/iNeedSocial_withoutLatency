@@ -77,6 +77,7 @@ export function FeedPage() {
     studySessionId: sessionId ?? "",
   })
   const { captureThemeToggleScrollState } = useFeedThemeScroll({
+    headerRef,
     isFeedReady: Boolean(payload) && !isLoading && !feedError,
     scheduleActivePostEvaluation,
     scrollRef,
@@ -141,7 +142,7 @@ export function FeedPage() {
           </div>
 
           <div className="feed-wrapper">
-            {isLoading && <FeedSkeleton isDark={isDark} />}
+            {isLoading && !payload && <FeedSkeleton isDark={isDark} />}
 
             {!isLoading && feedError && (
               <FeedErrorState
@@ -151,7 +152,7 @@ export function FeedPage() {
               />
             )}
 
-            {payload && !isLoading && !feedError && (
+            {payload && !feedError && (
               <div className={`divide-y ${dividerCls}`}>
                 {payload.posts.map((post, index) => (
                   <div
@@ -160,7 +161,6 @@ export function FeedPage() {
                     data-regular-post-id={post.id}
                   >
                     <RevealPost
-                      isDark={isDark}
                       tutorialId={!isDark && index === 0 ? "tutorial-post" : undefined}
                     >
                       <FeedPost
@@ -178,7 +178,7 @@ export function FeedPage() {
               </div>
             )}
 
-            {payload && !isLoading && !feedError && (
+            {payload && !feedError && (
               <div className={`flex flex-col items-center gap-3 py-10 border-t ${borderCls}`}>
                 <p
                   className={`text-[11px] font-medium tracking-widest uppercase ${

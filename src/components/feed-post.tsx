@@ -26,19 +26,25 @@ type AutoPlayVideoProps = {
   readonly isActive?: boolean
   readonly isMuted: boolean
   readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
+  readonly placeholderClassName?: string
   readonly poster?: string
   readonly src?: string
 }
+
+const VIDEO_PRELOAD_ROOT_MARGIN = "420px 0px"
 
 function AutoPlayVideo({
   className,
   isActive = true,
   isMuted,
   onLoadedMetadata,
+  placeholderClassName = "bg-ink/8",
   poster,
   src,
 }: AutoPlayVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [hasLoadedFrame, setHasLoadedFrame] = useState(false)
+  const [isNearViewport, setIsNearViewport] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
@@ -48,8 +54,19 @@ function AutoPlayVideo({
     }
 
     const observer = new IntersectionObserver(
-      ([entry]) => setIsVisible(entry.isIntersecting),
-      { threshold: 0.2 }
+      ([entry]) => {
+        const rootTop = entry.rootBounds?.top ?? 0
+        const rootBottom = entry.rootBounds?.bottom ?? window.innerHeight
+        const isInViewport =
+          entry.boundingClientRect.bottom > rootTop && entry.boundingClientRect.top < rootBottom
+
+        setIsNearViewport(entry.isIntersecting)
+        setIsVisible(isInViewport && entry.intersectionRatio >= 0.2)
+      },
+      {
+        rootMargin: VIDEO_PRELOAD_ROOT_MARGIN,
+        threshold: [0, 0.2],
+      }
     )
 
     observer.observe(video)
@@ -71,6 +88,21 @@ function AutoPlayVideo({
 
   useEffect(() => {
     const video = videoRef.current
+    if (!video || !isNearViewport) {
+      return
+    }
+
+    if (video.preload !== "auto") {
+      video.preload = "auto"
+    }
+
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      video.load()
+    }
+  }, [isNearViewport])
+
+  useEffect(() => {
+    const video = videoRef.current
     if (!video) {
       return
     }
@@ -84,17 +116,24 @@ function AutoPlayVideo({
   }, [isActive, isVisible, src])
 
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      className={className}
-      loop
-      onLoadedMetadata={onLoadedMetadata}
-      playsInline
-      poster={poster}
-      preload="metadata"
-      src={src}
-    />
+    <div className={`relative overflow-hidden ${placeholderClassName}`}>
+      {!hasLoadedFrame && <div className={`absolute inset-0 skeleton ${placeholderClassName}`} />}
+      <video
+        ref={videoRef}
+        autoPlay
+        className={`${className} transition-opacity duration-200 ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
+        loop
+        onLoadedData={() => setHasLoadedFrame(true)}
+        onLoadedMetadata={(event) => {
+          setHasLoadedFrame(true)
+          onLoadedMetadata?.(event)
+        }}
+        playsInline
+        poster={poster}
+        preload="metadata"
+        src={src}
+      />
+    </div>
   )
 }
 
@@ -110,6 +149,8 @@ export function FeedPost({
   const textPrimary = isDark ? "text-white" : "text-ink"
   const textMuted = isDark ? "text-white/50" : "text-haze"
   const iconBase = isDark ? "text-white" : "text-ink"
+  const mediaSurface = isDark ? "bg-white/8" : "bg-ink/8"
+  const mediaPlaceholder = isDark ? "bg-white/8" : "bg-ink/8"
   const [isMuted, setIsMuted] = useState(true)
   const [activeIdx, setActiveIdx] = useState(0)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
@@ -159,10 +200,11 @@ export function FeedPost({
       </div>
 
       {type === "video" && (
-        <div className="w-full bg-black overflow-hidden relative">
+        <div className={`w-full overflow-hidden relative ${mediaSurface}`}>
           <AutoPlayVideo
             className="w-full h-auto"
             isMuted={isMuted}
+            placeholderClassName={mediaPlaceholder}
             poster={media[0]?.poster}
             src={media[0]?.src}
           />
@@ -179,7 +221,7 @@ export function FeedPost({
 
       {type === "carousel" && (
         <div
-          className="w-full overflow-hidden relative transition-[height] duration-300"
+          className={`w-full overflow-hidden relative transition-[height] duration-300 ${mediaSurface}`}
           onTouchEnd={handleTouchEnd}
           onTouchStart={handleTouchStart}
           style={{ height: slideHeights[activeIdx] ? `${slideHeights[activeIdx]}px` : "auto" }}
@@ -198,6 +240,7 @@ export function FeedPost({
                   className="w-full h-auto shrink-0"
                   isActive={index === activeIdx}
                   isMuted={isMuted}
+                  placeholderClassName={mediaPlaceholder}
                   onLoadedMetadata={(event) => {
                     const video = event.currentTarget
                     const height = video.clientWidth * video.videoHeight / video.videoWidth
@@ -215,7 +258,8 @@ export function FeedPost({
                   key={item.src}
                   alt={item.alt}
                   className="w-full h-auto shrink-0"
-                  loading="lazy"
+                  decoding="async"
+                  fetchPriority={index === activeIdx ? "high" : "auto"}
                   onLoad={(event) => {
                     const image = event.currentTarget
                     const height = image.clientWidth * image.naturalHeight / image.naturalWidth
@@ -243,7 +287,10 @@ export function FeedPost({
           )}
 
           {media.length > 1 && (
-            <span className="absolute top-2.5 right-3 bg-black/50 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full">
+            <span
+              className="absolute top-2.5 right-3 bg-black/50 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full"
+              data-testid={`carousel-indicator-${post.id}`}
+            >
               {activeIdx + 1}/{media.length}
             </span>
           )}
@@ -265,6 +312,7 @@ export function FeedPost({
             <button
               aria-label="Sebelumnya"
               className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90 transition-transform"
+              data-testid={`carousel-prev-${post.id}`}
               onClick={prevSlide}
               type="button"
             >
@@ -276,6 +324,7 @@ export function FeedPost({
             <button
               aria-label="Berikutnya"
               className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90 transition-transform"
+              data-testid={`carousel-next-${post.id}`}
               onClick={nextSlide}
               type="button"
             >
@@ -286,11 +335,11 @@ export function FeedPost({
       )}
 
       {type === "image" && (
-        <div className="w-full overflow-hidden">
+        <div className={`w-full overflow-hidden ${mediaSurface}`}>
           <img
             alt={media[0]?.alt}
             className="w-full h-auto"
-            loading="lazy"
+            decoding="async"
             src={media[0]?.src}
           />
         </div>
