@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   normalizeFeedPayload,
+  resolveFeedPath,
   resolveFeedSource,
   validateFeedPayload,
 } from "./feed-service"
@@ -17,6 +18,16 @@ describe("feed-service helpers", () => {
     expect(resolveFeedSource("mock")).toBe("mock")
     expect(resolveFeedSource("anything-else")).toBe("mock")
     expect(resolveFeedSource("api")).toBe("api")
+  })
+
+  it("resolves feed paths against the configured Vite base path", () => {
+    expect(resolveFeedPath("/content/feed.json", "/")).toBe("/content/feed.json")
+    expect(resolveFeedPath("content/feed.json", "/study/")).toBe(
+      "/study/content/feed.json"
+    )
+    expect(resolveFeedPath("/api/feed?theme=dark", "/study")).toBe(
+      "/study/api/feed?theme=dark"
+    )
   })
 
   it("normalizes unknown genres to humor", () => {

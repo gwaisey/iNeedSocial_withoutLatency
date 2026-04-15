@@ -7,8 +7,8 @@ import {
 } from "./supabase"
 
 type SaveResponse = {
-  data: unknown
-  error: unknown
+  data: SessionReportPayload[] | null
+  error: Error | { message?: string; status?: number } | null
 }
 
 const payload: SessionReportPayload = {
