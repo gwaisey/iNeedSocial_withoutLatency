@@ -165,6 +165,37 @@ async function getFirstVisiblePostId(page: Page) {
   })
 }
 
+async function waitForVisibleFeedPost(page: Page) {
+  await expect
+    .poll(async () => getFirstVisiblePostId(page), {
+      message: "Expected at least one feed post to be visible in the viewport",
+    })
+    .not.toBeNull()
+}
+
+async function waitForRenderedImageMedia(page: Page, postId: string) {
+  await page.waitForFunction((targetPostId) => {
+    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
+    if (!post) {
+      return false
+    }
+
+    const images = Array.from(post.querySelectorAll("img[alt]"))
+    if (!images.length) {
+      return false
+    }
+
+    return images.some((node) => {
+      if (!(node instanceof HTMLImageElement)) {
+        return false
+      }
+
+      const style = window.getComputedStyle(node)
+      return node.complete && node.naturalWidth > 0 && style.opacity !== "0"
+    })
+  }, postId)
+}
+
 async function seedActiveStudySession(page: Page, sessionId: string) {
   await page.addInitScript((targetSessionId) => {
     window.sessionStorage.setItem("ineedsocial:study:active-session", targetSessionId)
@@ -380,6 +411,9 @@ test("repeated lifecycle flushes do not double-count tracked time", async ({ pag
 
 test("welcome asks for confirmation before replacing an unfinished session", async ({ page }) => {
   await startStudy(page)
+  await dismissTutorialIfVisible(page)
+  await setFeedScrollTop(page, 4_200)
+  await waitForFeedScrollTopAtLeast(page, 3_200)
   const firstSessionId = await page.evaluate(() =>
     window.sessionStorage.getItem("ineedsocial:study:active-session")
   )
@@ -395,6 +429,7 @@ test("welcome asks for confirmation before replacing an unfinished session", asy
   await page.getByTestId("start-study-button").click()
   await page.getByTestId("restart-session-confirm-button").click()
   await page.waitForURL("**/feed?theme=light")
+  await waitForVisibleFeedPost(page)
 
   const secondSessionId = await page.evaluate(() =>
     window.sessionStorage.getItem("ineedsocial:study:active-session")
@@ -418,17 +453,42 @@ test("browser back and forward preserve an unfinished session", async ({ page })
 
   await firstLikeButton.click()
   await expect(firstLikeButton).toHaveAttribute("data-liked", "true")
+  await setFeedScrollTop(page, 4_200)
+  await waitForFeedScrollTopAtLeast(page, 3_200)
 
   await page.goBack()
   await page.waitForURL("**/welcome")
 
   await page.goForward()
   await page.waitForURL("**/feed?theme=light")
+  await waitForVisibleFeedPost(page)
 
   expect(
     await page.evaluate(() => window.sessionStorage.getItem("ineedsocial:study:active-session"))
   ).toBe(activeSessionId)
   expect(await isPostLikedInSession(page, likedPostId)).toBe(true)
+})
+
+test("photo and carousel media render again after leaving and returning to feed", async ({
+  page,
+}) => {
+  await startStudy(page)
+  await dismissTutorialIfVisible(page)
+
+  await waitForRenderedImageMedia(page, "post-snoopy")
+  await setFeedScrollTop(page, 1_050)
+  await waitForFeedScrollTopAtLeast(page, 650)
+  await waitForRenderedImageMedia(page, "post-carousel")
+
+  await page.goBack()
+  await page.waitForURL("**/welcome")
+
+  await page.goForward()
+  await page.waitForURL("**/feed?theme=light")
+  await waitForRenderedImageMedia(page, "post-snoopy")
+  await setFeedScrollTop(page, 1_050)
+  await waitForFeedScrollTopAtLeast(page, 650)
+  await waitForRenderedImageMedia(page, "post-carousel")
 })
 
 test("tutorial overlay blocks feed interactions until dismissed", async ({ page }) => {
@@ -573,6 +633,8 @@ test("keluar clears a seeded session and forces a fresh restart", async ({ page 
   await page.goto("/feed?theme=light")
   await page.waitForURL("**/feed?theme=light")
   await dismissTutorialIfVisible(page)
+  await setFeedScrollTop(page, 4_200)
+  await waitForFeedScrollTopAtLeast(page, 3_200)
 
   await page.getByTestId("sidebar-exit-button").click()
   await expect(page.getByTestId("exit-session-confirm-button")).toBeVisible()
@@ -592,6 +654,7 @@ test("keluar clears a seeded session and forces a fresh restart", async ({ page 
 
   await page.getByTestId("start-study-button").click()
   await page.waitForURL("**/feed?theme=light")
+  await waitForVisibleFeedPost(page)
   expect(
     await page.evaluate(() => window.sessionStorage.getItem("ineedsocial:study:active-session"))
   ).not.toBe(seededSessionId)

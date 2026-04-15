@@ -147,8 +147,7 @@ img {
 }
 
 .feed-post-shell {
-  content-visibility: auto;
-  contain-intrinsic-size: 960px;
+  contain: layout style paint;
 }
 
 @media (min-width: 768px) {

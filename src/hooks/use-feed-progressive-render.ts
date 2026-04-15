@@ -12,6 +12,7 @@ type UseFeedProgressiveRenderArgs = {
 const INITIAL_RENDER_COUNT = 24
 const RENDER_STEP = 18
 const LOAD_MORE_OFFSET_PX = 2600
+const ESTIMATED_POST_HEIGHT_PX = 960
 
 export function useFeedProgressiveRender({
   isFeedReady,
@@ -49,7 +50,10 @@ export function useFeedProgressiveRender({
     let animationFrameId: number | null = null
 
     const maybeLoadMore = () => {
-      if (container.scrollTop + container.clientHeight < container.scrollHeight - LOAD_MORE_OFFSET_PX) {
+      const targetBottom = container.scrollTop + container.clientHeight + LOAD_MORE_OFFSET_PX
+      const missingHeight = targetBottom - container.scrollHeight
+
+      if (missingHeight <= 0) {
         return
       }
 
@@ -58,7 +62,10 @@ export function useFeedProgressiveRender({
           return current
         }
 
-        return Math.min(posts.length, current + RENDER_STEP)
+        const estimatedAdditionalPosts = Math.ceil(missingHeight / ESTIMATED_POST_HEIGHT_PX)
+        const nextStep = Math.max(RENDER_STEP, estimatedAdditionalPosts)
+
+        return Math.min(posts.length, current + nextStep)
       })
     }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type SyntheticEvent, type TouchEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent, type TouchEvent } from "react"
 import {
   Bookmark,
   ChevronLeft,
@@ -36,7 +36,7 @@ type AutoPlayVideoProps = {
 type ProgressiveImageProps = {
   readonly alt: string
   readonly className: string
-  readonly onLoad?: (event: SyntheticEvent<HTMLImageElement>) => void
+  readonly onLoad?: (image: HTMLImageElement) => void
   readonly placeholderClassName?: string
   readonly priority?: "high" | "low"
   readonly shellClassName?: string
@@ -44,8 +44,96 @@ type ProgressiveImageProps = {
   readonly src?: string
 }
 
-const IMAGE_PRELOAD_ROOT_MARGIN = "1000px 0px"
-const VIDEO_PRELOAD_ROOT_MARGIN = "1400px 0px"
+const VIDEO_PRELOAD_ROOT_MARGIN = "2400px 0px"
+
+function isVideoSource(src?: string) {
+  return Boolean(src?.endsWith(".mp4"))
+}
+
+function MediaMuteButton({
+  isMuted,
+  onClick,
+}: {
+  readonly isMuted: boolean
+  readonly onClick: () => void
+}) {
+  return (
+    <button
+      aria-label={isMuted ? "Nyalakan suara" : "Matikan suara"}
+      className="absolute bottom-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-[10px] font-semibold text-white"
+      onClick={onClick}
+      type="button"
+    >
+      {isMuted ? "Mati" : "Nyala"}
+    </button>
+  )
+}
+
+function CarouselSlideCounter({
+  activeIdx,
+  postId,
+  total,
+}: {
+  readonly activeIdx: number
+  readonly postId: string
+  readonly total: number
+}) {
+  return (
+    <span
+      className="absolute top-2.5 right-3 rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white"
+      data-testid={`carousel-indicator-${postId}`}
+    >
+      {activeIdx + 1}/{total}
+    </span>
+  )
+}
+
+function CarouselDots({
+  activeIdx,
+  mediaSources,
+}: {
+  readonly activeIdx: number
+  readonly mediaSources: string[]
+}) {
+  return (
+    <div className="pointer-events-none absolute bottom-2.5 left-1/2 flex -translate-x-1/2 gap-1.5">
+      {mediaSources.map((src, index) => (
+        <span
+          key={src}
+          className={`rounded-full transition-all duration-300 ${
+            index === activeIdx ? "h-1.5 w-4 bg-white" : "h-1.5 w-1.5 bg-white/50"
+          }`}
+        />
+      ))}
+    </div>
+  )
+}
+
+function CarouselNavButton({
+  direction,
+  onClick,
+  postId,
+}: {
+  readonly direction: "next" | "prev"
+  readonly onClick: () => void
+  readonly postId: string
+}) {
+  const isNext = direction === "next"
+
+  return (
+    <button
+      aria-label={isNext ? "Berikutnya" : "Sebelumnya"}
+      className={`absolute top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-transform active:scale-90 ${
+        isNext ? "right-2" : "left-2"
+      }`}
+      data-testid={`carousel-${direction}-${postId}`}
+      onClick={onClick}
+      type="button"
+    >
+      {isNext ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+    </button>
+  )
+}
 
 function AutoPlayVideo({
   className,
@@ -108,7 +196,9 @@ function AutoPlayVideo({
       return
     }
 
+    video.defaultMuted = isMuted
     video.muted = isMuted
+    video.volume = isMuted ? 0 : 1
   }, [isMuted])
 
   useEffect(() => {
@@ -159,6 +249,7 @@ function AutoPlayVideo({
           autoPlay
           className={`${className} transition-opacity duration-200 ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
           loop
+          muted={isMuted}
           onLoadedData={() => setHasLoadedFrame(true)}
           onLoadedMetadata={(event) => {
             setHasLoadedFrame(true)
@@ -184,60 +275,70 @@ function ProgressiveImage({
   skeletonClassName = "",
   src,
 }: ProgressiveImageProps) {
-  const shellRef = useRef<HTMLDivElement | null>(null)
+  const imageRef = useRef<HTMLImageElement | null>(null)
+  const hasReportedLoadRef = useRef(false)
   const [hasLoadedImage, setHasLoadedImage] = useState(false)
-  const [shouldMountImage, setShouldMountImage] = useState(priority === "high")
 
-  useEffect(() => {
-    const shell = shellRef.current
-    if (!shell || priority === "high") {
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setShouldMountImage(true)
-          observer.disconnect()
-        }
-      },
-      {
-        rootMargin: IMAGE_PRELOAD_ROOT_MARGIN,
-        threshold: 0,
+  const markImageReady = useCallback(
+    (image: HTMLImageElement) => {
+      if (!image.complete || image.naturalWidth === 0) {
+        return
       }
-    )
 
-    observer.observe(shell)
+      setHasLoadedImage(true)
+      if (hasReportedLoadRef.current) {
+        return
+      }
 
-    return () => {
-      observer.disconnect()
-    }
-  }, [priority])
+      hasReportedLoadRef.current = true
+      onLoad?.(image)
+    },
+    [onLoad]
+  )
 
   useEffect(() => {
     setHasLoadedImage(false)
-    setShouldMountImage(priority === "high")
-  }, [priority, src])
+    hasReportedLoadRef.current = false
+  }, [src])
+
+  useEffect(() => {
+    const image = imageRef.current
+    if (!image) {
+      return
+    }
+
+    if (image.complete && image.naturalWidth > 0) {
+      markImageReady(image)
+      return
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      if (imageRef.current) {
+        markImageReady(imageRef.current)
+      }
+    })
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }, [markImageReady, src])
 
   return (
     <div
-      ref={shellRef}
       className={`relative overflow-hidden ${placeholderClassName} ${shellClassName} ${hasLoadedImage ? "" : "aspect-[4/5]"}`}
     >
       {!hasLoadedImage && (
         <div className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`} />
       )}
-      {shouldMountImage && (
+      {src && (
         <img
+          ref={imageRef}
           alt={alt}
-          className={className}
+          className={`${className} transition-opacity duration-200 ${hasLoadedImage ? "opacity-100" : "opacity-0"}`}
           decoding="async"
           fetchPriority={priority}
           loading={priority === "high" ? "eager" : "lazy"}
-          onLoad={(event) => {
-            setHasLoadedImage(true)
-            onLoad?.(event)
-          }}
+          onLoad={(event) => markImageReady(event.currentTarget)}
           src={src}
         />
       )}
@@ -266,9 +367,20 @@ export function FeedPost({
   const [slideHeights, setSlideHeights] = useState<number[]>([])
 
   const { media, type } = post
+  const primaryMedia = media[0]
+  const mediaHasVideo = media.some((item) => isVideoSource(item.src))
+  const currentSlideHeight = slideHeights[activeIdx]
 
   const prevSlide = () => setActiveIdx((index) => Math.max(0, index - 1))
   const nextSlide = () => setActiveIdx((index) => Math.min(media.length - 1, index + 1))
+  const toggleMute = () => setIsMuted((current) => !current)
+  const updateSlideHeight = useCallback((index: number, height: number) => {
+    setSlideHeights((current) => {
+      const next = [...current]
+      next[index] = height
+      return next
+    })
+  }, [])
 
   const handleTouchStart = (event: TouchEvent) => {
     setTouchStartX(event.touches[0]?.clientX ?? null)
@@ -314,19 +426,12 @@ export function FeedPost({
             className="w-full h-auto"
             isMuted={isMuted}
             placeholderClassName={mediaPlaceholder}
-            poster={media[0]?.poster}
+            poster={primaryMedia?.poster}
             shellClassName="w-full"
             skeletonClassName={mediaSkeletonTone}
-            src={media[0]?.src}
+            src={primaryMedia?.src}
           />
-          <button
-            aria-label={isMuted ? "Nyalakan suara" : "Matikan suara"}
-            className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-[10px] font-semibold text-white z-10"
-            onClick={() => setIsMuted((current) => !current)}
-            type="button"
-          >
-            {isMuted ? "Mati" : "Nyala"}
-          </button>
+          <MediaMuteButton isMuted={isMuted} onClick={toggleMute} />
         </div>
       )}
 
@@ -335,17 +440,17 @@ export function FeedPost({
           className={`w-full overflow-hidden relative transition-[height] duration-300 ${mediaSurface}`}
           onTouchEnd={handleTouchEnd}
           onTouchStart={handleTouchStart}
-          style={{ height: slideHeights[activeIdx] ? `${slideHeights[activeIdx]}px` : "auto" }}
+          style={{ height: currentSlideHeight ? `${currentSlideHeight}px` : "auto" }}
         >
           <div
             className="flex will-change-transform transition-transform duration-300 ease-out"
             style={{
-              height: slideHeights[activeIdx] ? `${slideHeights[activeIdx]}px` : "auto",
+              height: currentSlideHeight ? `${currentSlideHeight}px` : "auto",
               transform: `translateX(-${activeIdx * 100}%)`,
             }}
           >
             {media.map((item, index) =>
-              item.src.endsWith(".mp4") ? (
+              isVideoSource(item.src) ? (
                 <AutoPlayVideo
                   key={item.src}
                   className="w-full h-auto shrink-0"
@@ -356,11 +461,7 @@ export function FeedPost({
                   onLoadedMetadata={(event) => {
                     const video = event.currentTarget
                     const height = video.clientWidth * video.videoHeight / video.videoWidth
-                    setSlideHeights((current) => {
-                      const next = [...current]
-                      next[index] = height
-                      return next
-                    })
+                    updateSlideHeight(index, height)
                   }}
                   poster={item.poster}
                   shellClassName="w-full shrink-0"
@@ -375,14 +476,9 @@ export function FeedPost({
                   placeholderClassName={mediaPlaceholder}
                   shellClassName="w-full shrink-0"
                   skeletonClassName={mediaSkeletonTone}
-                  onLoad={(event) => {
-                    const image = event.currentTarget
+                  onLoad={(image) => {
                     const height = image.clientWidth * image.naturalHeight / image.naturalWidth
-                    setSlideHeights((current) => {
-                      const next = [...current]
-                      next[index] = height
-                      return next
-                    })
+                    updateSlideHeight(index, height)
                   }}
                   src={item.src}
                 />
@@ -390,61 +486,16 @@ export function FeedPost({
             )}
           </div>
 
-          {media.some((item) => item.src.endsWith(".mp4")) && (
-            <button
-              aria-label={isMuted ? "Nyalakan suara" : "Matikan suara"}
-              className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-[10px] font-semibold text-white z-10"
-              onClick={() => setIsMuted((current) => !current)}
-              type="button"
-            >
-              {isMuted ? "Mati" : "Nyala"}
-            </button>
-          )}
+          {mediaHasVideo && <MediaMuteButton isMuted={isMuted} onClick={toggleMute} />}
 
-          {media.length > 1 && (
-            <span
-              className="absolute top-2.5 right-3 bg-black/50 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full"
-              data-testid={`carousel-indicator-${post.id}`}
-            >
-              {activeIdx + 1}/{media.length}
-            </span>
-          )}
+          {media.length > 1 && <CarouselSlideCounter activeIdx={activeIdx} postId={post.id} total={media.length} />}
 
-          {media.length > 1 && (
-            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
-              {media.map((item, index) => (
-                <span
-                  key={item.src}
-                  className={`rounded-full transition-all duration-300 ${
-                    index === activeIdx ? "w-4 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/50"
-                  }`}
-                />
-              ))}
-            </div>
-          )}
+          {media.length > 1 && <CarouselDots activeIdx={activeIdx} mediaSources={media.map((item) => item.src)} />}
 
-          {activeIdx > 0 && (
-            <button
-              aria-label="Sebelumnya"
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90 transition-transform"
-              data-testid={`carousel-prev-${post.id}`}
-              onClick={prevSlide}
-              type="button"
-            >
-              <ChevronLeft size={16} />
-            </button>
-          )}
+          {activeIdx > 0 && <CarouselNavButton direction="prev" onClick={prevSlide} postId={post.id} />}
 
           {activeIdx < media.length - 1 && (
-            <button
-              aria-label="Berikutnya"
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white active:scale-90 transition-transform"
-              data-testid={`carousel-next-${post.id}`}
-              onClick={nextSlide}
-              type="button"
-            >
-              <ChevronRight size={16} />
-            </button>
+            <CarouselNavButton direction="next" onClick={nextSlide} postId={post.id} />
           )}
         </div>
       )}
@@ -452,13 +503,13 @@ export function FeedPost({
       {type === "image" && (
         <div className={`w-full overflow-hidden ${mediaSurface}`}>
           <ProgressiveImage
-            alt={media[0]?.alt}
+            alt={primaryMedia?.alt}
             className="w-full h-auto"
             placeholderClassName={mediaPlaceholder}
             priority="high"
             shellClassName="w-full"
             skeletonClassName={mediaSkeletonTone}
-            src={media[0]?.src}
+            src={primaryMedia?.src}
           />
         </div>
       )}

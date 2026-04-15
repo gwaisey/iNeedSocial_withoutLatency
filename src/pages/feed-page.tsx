@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react"
+import React, { useLayoutEffect, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { BrandLogo } from "../components/brand-logo"
 import { CommentSheet } from "../components/comment-sheet"
@@ -95,6 +95,14 @@ export function FeedPage() {
     isLocked: isTutorialUiActive,
     participantShellRef,
   })
+
+  useLayoutEffect(() => {
+    if (!scrollRef.current) {
+      return
+    }
+
+    scrollRef.current.scrollTop = 0
+  }, [])
 
   const { handleConfirmExitSession, handleEndSession, handleThemeToggle } = useFeedPageActions({
     captureThemeToggleScrollState,
