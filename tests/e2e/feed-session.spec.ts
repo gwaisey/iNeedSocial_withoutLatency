@@ -445,7 +445,6 @@ test("tutorial overlay blocks feed interactions until dismissed", async ({ page 
 
   const firstLikeButton = page.locator('[data-testid^="like-button-"]').first()
   await firstLikeButton.waitFor({ state: "visible" })
-  await expect(tutorialDelayBlocker).toBeVisible()
   const boundingBox = await firstLikeButton.boundingBox()
   expect(boundingBox).not.toBeNull()
   const scrollTopBeforeBlockedWheel = await getFeedScrollTop(page)

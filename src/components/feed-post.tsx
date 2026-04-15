@@ -28,10 +28,24 @@ type AutoPlayVideoProps = {
   readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
   readonly placeholderClassName?: string
   readonly poster?: string
+  readonly shellClassName?: string
+  readonly skeletonClassName?: string
   readonly src?: string
 }
 
-const VIDEO_PRELOAD_ROOT_MARGIN = "420px 0px"
+type ProgressiveImageProps = {
+  readonly alt: string
+  readonly className: string
+  readonly onLoad?: (event: SyntheticEvent<HTMLImageElement>) => void
+  readonly placeholderClassName?: string
+  readonly priority?: "high" | "low"
+  readonly shellClassName?: string
+  readonly skeletonClassName?: string
+  readonly src?: string
+}
+
+const IMAGE_PRELOAD_ROOT_MARGIN = "1000px 0px"
+const VIDEO_PRELOAD_ROOT_MARGIN = "1400px 0px"
 
 function AutoPlayVideo({
   className,
@@ -40,16 +54,20 @@ function AutoPlayVideo({
   onLoadedMetadata,
   placeholderClassName = "bg-ink/8",
   poster,
+  shellClassName = "",
+  skeletonClassName = "",
   src,
 }: AutoPlayVideoProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [hasLoadedFrame, setHasLoadedFrame] = useState(false)
   const [isNearViewport, setIsNearViewport] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  const [shouldMountVideo, setShouldMountVideo] = useState(false)
 
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) {
+    const shell = shellRef.current
+    if (!shell) {
       return
     }
 
@@ -62,6 +80,9 @@ function AutoPlayVideo({
 
         setIsNearViewport(entry.isIntersecting)
         setIsVisible(isInViewport && entry.intersectionRatio >= 0.2)
+        if (entry.isIntersecting) {
+          setShouldMountVideo(true)
+        }
       },
       {
         rootMargin: VIDEO_PRELOAD_ROOT_MARGIN,
@@ -69,13 +90,17 @@ function AutoPlayVideo({
       }
     )
 
-    observer.observe(video)
+    observer.observe(shell)
 
     return () => {
       observer.disconnect()
-      video.pause()
     }
   }, [])
+
+  useEffect(() => {
+    setHasLoadedFrame(false)
+    setShouldMountVideo(false)
+  }, [src])
 
   useEffect(() => {
     const video = videoRef.current
@@ -92,14 +117,10 @@ function AutoPlayVideo({
       return
     }
 
-    if (video.preload !== "auto") {
-      video.preload = "auto"
-    }
-
     if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       video.load()
     }
-  }, [isNearViewport])
+  }, [isNearViewport, src])
 
   useEffect(() => {
     const video = videoRef.current
@@ -116,23 +137,110 @@ function AutoPlayVideo({
   }, [isActive, isVisible, src])
 
   return (
-    <div className={`relative overflow-hidden ${placeholderClassName}`}>
-      {!hasLoadedFrame && <div className={`absolute inset-0 skeleton ${placeholderClassName}`} />}
-      <video
-        ref={videoRef}
-        autoPlay
-        className={`${className} transition-opacity duration-200 ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
-        loop
-        onLoadedData={() => setHasLoadedFrame(true)}
-        onLoadedMetadata={(event) => {
-          setHasLoadedFrame(true)
-          onLoadedMetadata?.(event)
-        }}
-        playsInline
-        poster={poster}
-        preload="metadata"
-        src={src}
-      />
+    <div
+      ref={shellRef}
+      className={`relative overflow-hidden ${placeholderClassName} ${shellClassName} ${hasLoadedFrame ? "" : "aspect-[4/5]"}`}
+    >
+      {!hasLoadedFrame && (
+        <div className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`} />
+      )}
+      {poster && !hasLoadedFrame && (
+        <img
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+          decoding="async"
+          src={poster}
+        />
+      )}
+      {shouldMountVideo && (
+        <video
+          ref={videoRef}
+          autoPlay
+          className={`${className} transition-opacity duration-200 ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
+          loop
+          onLoadedData={() => setHasLoadedFrame(true)}
+          onLoadedMetadata={(event) => {
+            setHasLoadedFrame(true)
+            onLoadedMetadata?.(event)
+          }}
+          playsInline
+          poster={poster}
+          preload="auto"
+          src={src}
+        />
+      )}
+    </div>
+  )
+}
+
+function ProgressiveImage({
+  alt,
+  className,
+  onLoad,
+  placeholderClassName = "bg-ink/8",
+  priority = "low",
+  shellClassName = "",
+  skeletonClassName = "",
+  src,
+}: ProgressiveImageProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const [hasLoadedImage, setHasLoadedImage] = useState(false)
+  const [shouldMountImage, setShouldMountImage] = useState(priority === "high")
+
+  useEffect(() => {
+    const shell = shellRef.current
+    if (!shell || priority === "high") {
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldMountImage(true)
+          observer.disconnect()
+        }
+      },
+      {
+        rootMargin: IMAGE_PRELOAD_ROOT_MARGIN,
+        threshold: 0,
+      }
+    )
+
+    observer.observe(shell)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [priority])
+
+  useEffect(() => {
+    setHasLoadedImage(false)
+    setShouldMountImage(priority === "high")
+  }, [priority, src])
+
+  return (
+    <div
+      ref={shellRef}
+      className={`relative overflow-hidden ${placeholderClassName} ${shellClassName} ${hasLoadedImage ? "" : "aspect-[4/5]"}`}
+    >
+      {!hasLoadedImage && (
+        <div className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`} />
+      )}
+      {shouldMountImage && (
+        <img
+          alt={alt}
+          className={className}
+          decoding="async"
+          fetchPriority={priority}
+          loading={priority === "high" ? "eager" : "lazy"}
+          onLoad={(event) => {
+            setHasLoadedImage(true)
+            onLoad?.(event)
+          }}
+          src={src}
+        />
+      )}
     </div>
   )
 }
@@ -151,6 +259,7 @@ export function FeedPost({
   const iconBase = isDark ? "text-white" : "text-ink"
   const mediaSurface = isDark ? "bg-white/8" : "bg-ink/8"
   const mediaPlaceholder = isDark ? "bg-white/8" : "bg-ink/8"
+  const mediaSkeletonTone = isDark ? "skeleton-dark" : ""
   const [isMuted, setIsMuted] = useState(true)
   const [activeIdx, setActiveIdx] = useState(0)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
@@ -206,6 +315,8 @@ export function FeedPost({
             isMuted={isMuted}
             placeholderClassName={mediaPlaceholder}
             poster={media[0]?.poster}
+            shellClassName="w-full"
+            skeletonClassName={mediaSkeletonTone}
             src={media[0]?.src}
           />
           <button
@@ -241,6 +352,7 @@ export function FeedPost({
                   isActive={index === activeIdx}
                   isMuted={isMuted}
                   placeholderClassName={mediaPlaceholder}
+                  skeletonClassName={mediaSkeletonTone}
                   onLoadedMetadata={(event) => {
                     const video = event.currentTarget
                     const height = video.clientWidth * video.videoHeight / video.videoWidth
@@ -251,15 +363,18 @@ export function FeedPost({
                     })
                   }}
                   poster={item.poster}
+                  shellClassName="w-full shrink-0"
                   src={item.src}
                 />
               ) : (
-                <img
+                <ProgressiveImage
                   key={item.src}
                   alt={item.alt}
                   className="w-full h-auto shrink-0"
-                  decoding="async"
-                  fetchPriority={index === activeIdx ? "high" : "auto"}
+                  priority={Math.abs(index - activeIdx) <= 1 ? "high" : "low"}
+                  placeholderClassName={mediaPlaceholder}
+                  shellClassName="w-full shrink-0"
+                  skeletonClassName={mediaSkeletonTone}
                   onLoad={(event) => {
                     const image = event.currentTarget
                     const height = image.clientWidth * image.naturalHeight / image.naturalWidth
@@ -336,10 +451,13 @@ export function FeedPost({
 
       {type === "image" && (
         <div className={`w-full overflow-hidden ${mediaSurface}`}>
-          <img
+          <ProgressiveImage
             alt={media[0]?.alt}
             className="w-full h-auto"
-            decoding="async"
+            placeholderClassName={mediaPlaceholder}
+            priority="high"
+            shellClassName="w-full"
+            skeletonClassName={mediaSkeletonTone}
             src={media[0]?.src}
           />
         </div>

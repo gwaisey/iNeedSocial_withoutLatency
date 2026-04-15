@@ -213,3 +213,8 @@ img {
   animation: shimmer 1.4s infinite linear;
   border-radius: 0.5rem;
 }
+
+.skeleton-dark {
+  background: linear-gradient(90deg, rgba(245, 244, 251, 0.08) 25%, rgba(245, 244, 251, 0.16) 50%, rgba(245, 244, 251, 0.08) 75%);
+  background-size: 800px 100%;
+}

@@ -16,6 +16,7 @@ import { TutorialDelayBlocker } from "../components/tutorial/TutorialDelayBlocke
 import { TutorialOverlay } from "../components/tutorial/TutorialOverlay"
 import { useStudyState } from "../context/study-context"
 import { useFeedLoader } from "../hooks/use-feed-loader"
+import { useFeedProgressiveRender } from "../hooks/use-feed-progressive-render"
 import { useFeedSession } from "../hooks/use-feed-session"
 import { useFeedPageActions } from "../hooks/use-feed-page-actions"
 import { useFeedThemeScroll } from "../hooks/use-feed-theme-scroll"
@@ -56,6 +57,11 @@ export function FeedPage() {
   const themeMode = resolveThemeMode(location.search)
   const isDark = themeMode === "dark"
   const { feedError, isLoading, payload, retryFeed } = useFeedLoader({ themeMode })
+  const { hasMorePosts, visiblePosts } = useFeedProgressiveRender({
+    isFeedReady: Boolean(payload) && !feedError,
+    posts: payload?.posts ?? null,
+    scrollRef,
+  })
   const { hideTutorial, isTutorialBlocking, showTutorial, showTutorialDelayBlocker } =
     useFeedTutorialVisibility({
       feedError,
@@ -154,7 +160,7 @@ export function FeedPage() {
 
             {payload && !feedError && (
               <div className={`divide-y ${dividerCls}`}>
-                {payload.posts.map((post, index) => (
+                {visiblePosts.map((post, index) => (
                   <div
                     key={`${post.id}-${index}`}
                     data-post-id={post.id}
@@ -178,7 +184,7 @@ export function FeedPage() {
               </div>
             )}
 
-            {payload && !feedError && (
+            {payload && !feedError && !hasMorePosts && (
               <div className={`flex flex-col items-center gap-3 py-10 border-t ${borderCls}`}>
                 <p
                   className={`text-[11px] font-medium tracking-widest uppercase ${

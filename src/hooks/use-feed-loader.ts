@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { FeedPayload, ThemeMode } from "../types/social"
 import { socialFeedService } from "../services/feed-service"
 import { getUserFacingErrorMessage } from "../utils/error-utils"
@@ -8,6 +8,8 @@ type UseFeedLoaderArgs = {
 }
 
 export function useFeedLoader({ themeMode }: UseFeedLoaderArgs) {
+  const forcedRefreshThemeRef = useRef<ThemeMode | null>(null)
+  const payloadCacheRef = useRef<Partial<Record<ThemeMode, FeedPayload>>>({})
   const [payload, setPayload] = useState<FeedPayload | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [feedError, setFeedError] = useState<string | null>(null)
@@ -15,6 +17,18 @@ export function useFeedLoader({ themeMode }: UseFeedLoaderArgs) {
 
   useEffect(() => {
     let active = true
+    const cachedPayload = payloadCacheRef.current[themeMode]
+    const shouldForceRefresh = forcedRefreshThemeRef.current === themeMode
+
+    if (cachedPayload && !shouldForceRefresh) {
+      setPayload(cachedPayload)
+      setFeedError(null)
+      setIsLoading(false)
+
+      return () => {
+        active = false
+      }
+    }
 
     async function loadFeed() {
       setIsLoading(true)
@@ -26,12 +40,16 @@ export function useFeedLoader({ themeMode }: UseFeedLoaderArgs) {
           return
         }
 
+        forcedRefreshThemeRef.current = null
+        payloadCacheRef.current[themeMode] = nextPayload
         setPayload(nextPayload)
       } catch (error) {
         if (!active) {
           return
         }
 
+        forcedRefreshThemeRef.current = null
+        setPayload((current) => (current?.theme === themeMode ? current : null))
         setFeedError(
           getUserFacingErrorMessage(error, "Feed tidak dapat dimuat.", "feed-page:load")
         )
@@ -53,6 +71,9 @@ export function useFeedLoader({ themeMode }: UseFeedLoaderArgs) {
     feedError,
     isLoading,
     payload,
-    retryFeed: () => setFeedRequestKey((current) => current + 1),
+    retryFeed: () => {
+      forcedRefreshThemeRef.current = themeMode
+      setFeedRequestKey((current) => current + 1)
+    },
   }
 }
