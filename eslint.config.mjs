@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       "dist",
       "node_modules",
+      "test-results",
       "*.tsbuildinfo",
       "vite-dev.out.log",
       "vite-dev.err.log",

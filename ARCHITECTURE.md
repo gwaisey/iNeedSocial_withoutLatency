@@ -5,10 +5,10 @@
 iNeedSocial adalah aplikasi React single-page untuk studi penelitian berbasis feed. Alur peserta dibuat sesederhana mungkin:
 
 ```text
-/splash -> /welcome -> /feed -> overlay durasi -> /thank-you
+/splash -> /welcome -> /feed -> /thank-you
 ```
 
-Aplikasi ini bersifat mock-first. Konten feed berasal dari `public/content/feed.json`, sedangkan ringkasan sesi dapat disimpan ke Supabase secara opsional. Client browser hanya menangani penulisan yang aman untuk peserta dan ekspor lokal per pengguna.
+Aplikasi ini bersifat mock-first. Konten feed berasal dari `public/content/feed.json`, sedangkan ringkasan sesi dapat disimpan ke Supabase secara opsional. Client browser hanya menangani penulisan yang aman untuk peserta dan status akhir sesi di halaman terima kasih.
 
 ## Struktur Runtime
 
@@ -30,10 +30,9 @@ File utama:
 
 - `src/App.tsx` mendefinisikan route dan mempertahankan `/timer` sebagai redirect ke `/feed`.
 - `src/pages/feed-page.tsx` mengorkestrasi layout feed, status loading, tutorial, dan pemulihan posisi scroll saat ganti tema.
-- `src/hooks/use-feed-session.ts` menangani atribusi waktu per post, pemulihan snapshot sesi setelah refresh, finalisasi sesi, serta penyimpanan dan ekspor laporan peserta.
-- `src/components/timer-summary-overlay.tsx` merender overlay ringkasan durasi yang dipakai ulang dari snapshot sesi final.
+- `src/hooks/use-feed-session.ts` menangani atribusi waktu per post, pemulihan snapshot sesi setelah refresh, finalisasi sesi, serta penyimpanan status sesi peserta.
 - `src/services/feed-service.ts` memilih sumber data feed berdasarkan env, memvalidasi payload feed, lalu menormalisasi data feed.
-- `src/services/supabase.ts` memvalidasi konfigurasi Supabase frontend, menyimpan satu ringkasan sesi secara idempoten berdasarkan `session_id`, dan me-load `xlsx` secara lazy untuk ekspor per pengguna.
+- `src/services/supabase.ts` memvalidasi konfigurasi Supabase frontend dan menyimpan satu ringkasan sesi secara idempoten berdasarkan `session_id`.
 - `scripts/export-all-sessions.mjs` adalah jalur ekspor admin lokal untuk seluruh data sesi menggunakan service-role key privat.
 - `src/context/study-context.tsx` menyimpan state komentar, suka, repost, dan session id aktif dengan namespace berbasis sesi studi.
 - `src/context/study-session-storage.ts` menyimpan interaksi, progres tutorial, dan snapshot timer/feed di `sessionStorage`.
@@ -50,7 +49,7 @@ Route dibuat ringkas:
 - `/timer` redirect ke `/feed`
 - `/thank-you` adalah layar akhir
 
-Timer bukan halaman terpisah. Tombol di sidebar desktop dan CTA mobile sama-sama membuka overlay yang sama di dalam `FeedPage`.
+Tombol akhiri sesi di sidebar desktop dan CTA mobile sama-sama memfinalisasi sesi aktif lalu mengarahkan peserta langsung ke halaman terima kasih.
 
 ## Model Data Feed
 
@@ -93,13 +92,11 @@ Perilaku penting:
 
 - Session id studi yang sama dipakai sebagai sumber kebenaran untuk suka, repost, tutorial, dan snapshot timer.
 - Waktu selalu dialokasikan ke satu post reguler setelah feed tampil, sehingga timer utama selaras dengan total kategori.
-- Durasi post aktif difinalisasi sebelum overlay durasi dibuka.
-- Total kategori yang sudah difinalisasi dipakai ulang untuk penyimpanan Supabase dan ekspor Excel per pengguna.
+- Durasi post aktif difinalisasi sebelum sesi diakhiri.
+- Total kategori yang sudah difinalisasi dipakai ulang untuk penyimpanan Supabase dan retry penyimpanan dari halaman terima kasih.
 - Snapshot sesi ditulis ke `sessionStorage` pada perubahan state penting, `pagehide`, dan sebelum transisi tema sehingga refresh pada tab yang sama dapat melanjutkan sesi aktif.
 - Reload halaman tidak menghitung jeda refresh sebagai durasi feed aktif.
-- Guard mencegah insert sesi ganda jika overlay dibuka kembali.
-
-Overlay membekukan durasi total dan rincian kategori berdasarkan snapshot final sesi tersebut.
+- Guard mencegah insert sesi ganda jika aksi akhir sesi dipicu ulang atau retry save dijalankan.
 
 ## State Interaksi Peserta
 
@@ -145,7 +142,7 @@ Penyimpanan Supabase frontend juga eksplisit:
 - validasi env sebelum membuat client,
 - gagal secara graceful jika konfigurasi tidak ada atau tidak valid,
 - menggunakan `upsert` berbasis `session_id` dengan retry terbatas hanya untuk kegagalan transient,
-- tampilkan status penyimpanan di overlay durasi tanpa menghambat alur studi.
+- tampilkan status penyimpanan di halaman terima kasih tanpa mengembalikan peserta ke feed.
 
 ## Batasan Akses Supabase
 
@@ -156,7 +153,7 @@ Terdapat dua batas akses yang berbeda:
 - memakai `VITE_SUPABASE_URL`
 - memakai `VITE_SUPABASE_PUBLISHABLE_KEY`
 - hanya menyimpan satu ringkasan sesi
-- hanya mengekspor laporan sesi milik pengguna yang sedang aktif
+- tidak menampilkan analytics atau ekspor laporan di UI peserta
 
 ### Skrip admin lokal
 

@@ -1,6 +1,6 @@
 # iNeedSocial
 
-iNeedSocial adalah aplikasi web React + TypeScript + Vite yang mensimulasikan feed media sosial untuk kebutuhan penelitian. Peserta melewati halaman splash, halaman sambutan, feed utama, lalu halaman terima kasih. Ringkasan durasi studi ditampilkan sebagai overlay di dalam feed, bukan sebagai halaman terpisah.
+iNeedSocial adalah aplikasi web React + TypeScript + Vite yang mensimulasikan feed media sosial untuk kebutuhan penelitian. Peserta melewati halaman splash, halaman sambutan, feed utama, lalu halaman terima kasih. Aplikasi melacak durasi sesi dan interaksi penelitian di belakang layar tanpa menampilkan ringkasan analitik ke peserta.
 
 ## Tumpukan Teknologi
 
@@ -81,7 +81,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 
 Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`. Route `/api/feed` tidak disediakan di repo ini, sehingga mode `api` tetap membutuhkan backend eksternal.
 
-Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Overlay durasi hanya akan menampilkan pesan non-blocking, dan peserta tetap dapat mengunduh laporan sesinya sendiri secara lokal.
+Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Status penyimpanan sesi akan tetap ditampilkan secara non-blocking di halaman terima kasih.
 
 ### Variabel privat untuk ekspor admin
 
@@ -95,7 +95,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ## Alur Studi
 
 ```text
-/ -> /splash -> /welcome -> /feed?theme=light -> overlay durasi -> /thank-you
+/ -> /splash -> /welcome -> /feed?theme=light -> /thank-you
 ```
 
 | Layar | URL | Fungsi |
@@ -103,7 +103,6 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 | Splash | `/splash` | Layar pembuka yang mengarahkan ke halaman sambutan |
 | Sambutan | `/welcome` | Titik masuk sebelum peserta melihat feed |
 | Feed | `/feed` | Pengalaman studi utama dalam tema terang atau gelap |
-| Overlay durasi | di dalam `/feed` | Menampilkan durasi dan rincian kategori |
 | Terima kasih | `/thank-you` | Layar penutup setelah sesi selesai |
 
 `/timer` tetap tersedia sebagai redirect kompatibilitas ke `/feed`, tetapi bukan halaman studi mandiri.
@@ -138,14 +137,15 @@ Aliran post yang sama digunakan untuk mode terang dan gelap. Konten stimulus pen
 - Status suka dan repost sekarang disimpan di `sessionStorage`, bukan `localStorage`.
 - Refresh pada tab yang sama tetap mempertahankan interaksi, progres tutorial, dan snapshot timer selama sesi studi yang sama.
 - Memulai sesi baru dari halaman sambutan akan membuat namespace sesi baru dan menghapus interaksi sesi sebelumnya.
-- Membuka ulang overlay durasi di sesi yang sama tidak mereset interaksi peserta.
 - Reload halaman tidak menghitung jeda refresh sebagai waktu melihat feed, tetapi melanjutkan timer dari snapshot sesi aktif setelah feed kembali tampil.
 
 ## Penyimpanan Sesi dan Ekspor
 
 - Aplikasi peserta menyimpan satu ringkasan sesi ke Supabase untuk setiap sesi studi.
 - Browser peserta hanya menjalankan perilaku yang aman untuk peserta.
-- Peserta dapat mengunduh laporan sesinya sendiri dalam format `.xlsx` dari overlay durasi.
+- Ketika sesi diakhiri, peserta langsung diarahkan ke halaman terima kasih.
+- Halaman terima kasih menampilkan status penyimpanan sesi dan kode sesi hanya jika penyimpanan berhasil.
+- Jika penyimpanan gagal, halaman terima kasih menyediakan tombol retry tanpa mengembalikan peserta ke feed.
 - Ekspor seluruh sesi tidak tersedia di UI peserta.
 - Penyimpanan sesi peserta sekarang bersifat idempoten berdasarkan `session_id`, sehingga refresh atau retry tidak membuat baris duplikat jika migrasi database sudah diterapkan.
 

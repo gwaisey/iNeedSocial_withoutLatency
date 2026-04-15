@@ -1,6 +1,6 @@
 {
-  "name": "Gaby Social Media",
-  "short_name": "Gaby",
+  "name": "iNeedSocial",
+  "short_name": "iNeedSocial",
   "description": "Social media study application",
   "start_url": "/",
   "display": "standalone",

@@ -47,7 +47,7 @@ export function RightPanel({ theme }: RightPanelProps) {
       </div>
 
       <div className={`mt-8 space-y-1 text-xs ${textSecondary}`}>
-        <p>(c) 2024 Gaby Media Sosial</p>
+        <p>(c) 2024 iNeedSocial</p>
         <p>Dibuat untuk keperluan penelitian</p>
       </div>
     </div>
