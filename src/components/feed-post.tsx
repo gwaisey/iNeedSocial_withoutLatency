@@ -1,3 +1,4 @@
+import { type RefObject } from "react"
 import { type Post } from "../types/social"
 import {
   FeedPostActions,
@@ -17,6 +18,7 @@ type FeedPostProps = {
   readonly onRepost: () => void
   readonly onToggleVideoMute: () => void
   readonly post: Post
+  readonly scrollRootRef?: RefObject<HTMLElement | null>
 }
 
 export function FeedPost({
@@ -29,6 +31,7 @@ export function FeedPost({
   onRepost,
   onToggleVideoMute,
   post,
+  scrollRootRef,
 }: FeedPostProps) {
   const palette = getFeedPostPalette(isDark)
 
@@ -40,6 +43,7 @@ export function FeedPost({
         isMuted={isVideoMuted}
         onToggleMute={onToggleVideoMute}
         post={post}
+        scrollRootRef={scrollRootRef}
       />
       <FeedPostActions
         iconBase={palette.iconBase}

@@ -1,3 +1,4 @@
+import { type RefObject } from "react"
 import { type Post } from "../types/social"
 import { useFeedCarousel } from "../hooks/use-feed-carousel"
 import { AutoPlayVideo } from "./auto-play-video"
@@ -21,17 +22,20 @@ type FeedPostMediaProps = {
   readonly isMuted: boolean
   readonly onToggleMute: () => void
   readonly post: Post
+  readonly scrollRootRef?: RefObject<HTMLElement | null>
 }
 
 function FeedPostVideoMedia({
   isMuted,
   onToggleMute,
   post,
+  scrollRootRef,
   tokens,
 }: {
   readonly isMuted: boolean
   readonly onToggleMute: () => void
   readonly post: Post
+  readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly tokens: MediaSurfaceTokens
 }) {
   const primaryMedia = post.media[0]
@@ -43,6 +47,7 @@ function FeedPostVideoMedia({
         isMuted={isMuted}
         placeholderClassName={tokens.placeholder}
         poster={primaryMedia?.poster}
+        scrollRootRef={scrollRootRef}
         shellClassName="w-full"
         skeletonClassName={tokens.skeletonTone}
         src={primaryMedia?.src}
@@ -56,11 +61,13 @@ function FeedPostCarouselMedia({
   isMuted,
   onToggleMute,
   post,
+  scrollRootRef,
   tokens,
 }: {
   readonly isMuted: boolean
   readonly onToggleMute: () => void
   readonly post: Post
+  readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly tokens: MediaSurfaceTokens
 }) {
   const { media } = post
@@ -93,6 +100,7 @@ function FeedPostCarouselMedia({
           isVideoSource(item.src) ? (
             <AutoPlayVideo
               key={item.src}
+              canPrewarm={Math.abs(index - activeIdx) <= 1}
               className="w-full h-auto shrink-0"
               isActive={index === activeIdx}
               isMuted={isMuted}
@@ -101,6 +109,7 @@ function FeedPostCarouselMedia({
               }}
               placeholderClassName={tokens.placeholder}
               poster={item.poster}
+              scrollRootRef={scrollRootRef}
               shellClassName="w-full shrink-0"
               skeletonClassName={tokens.skeletonTone}
               src={item.src}
@@ -175,6 +184,7 @@ export function FeedPostMedia({
   isMuted,
   onToggleMute,
   post,
+  scrollRootRef,
 }: FeedPostMediaProps) {
   const tokens = getMediaSurfaceTokens(isDark)
 
@@ -185,6 +195,7 @@ export function FeedPostMedia({
           isMuted={isMuted}
           onToggleMute={onToggleMute}
           post={post}
+          scrollRootRef={scrollRootRef}
           tokens={tokens}
         />
       )
@@ -194,6 +205,7 @@ export function FeedPostMedia({
           isMuted={isMuted}
           onToggleMute={onToggleMute}
           post={post}
+          scrollRootRef={scrollRootRef}
           tokens={tokens}
         />
       )

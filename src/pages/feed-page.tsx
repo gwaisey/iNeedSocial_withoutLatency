@@ -189,6 +189,7 @@ export function FeedPage() {
                         onRepost={() => toggleReposted(post.id)}
                         onToggleVideoMute={() => setVideoMutedPreference(!isVideoMutedByDefault)}
                         post={post}
+                        scrollRootRef={scrollRef}
                       />
                     </RevealPost>
                   </div>
