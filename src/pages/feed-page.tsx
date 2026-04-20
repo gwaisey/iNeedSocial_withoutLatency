@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { BrandLogo } from "../components/brand-logo"
 import { CommentSheet } from "../components/comment-sheet"
@@ -45,11 +45,13 @@ export function FeedPage() {
   const {
     commentSheet,
     discardStudySession,
+    isVideoMutedByDefault,
     likedPosts,
     repostedPosts,
     sessionId,
     closeCommentSheet,
     openCommentSheet,
+    setVideoMutedPreference,
     toggleLiked,
     toggleReposted,
   } = useStudyState()
@@ -181,9 +183,11 @@ export function FeedPage() {
                         isDark={isDark}
                         isLiked={Boolean(likedPosts[post.id])}
                         isReposted={Boolean(repostedPosts[post.id])}
+                        isVideoMuted={isVideoMutedByDefault}
                         onComment={() => openCommentSheet(post.id)}
                         onLike={() => toggleLiked(post.id)}
                         onRepost={() => toggleReposted(post.id)}
+                        onToggleVideoMute={() => setVideoMutedPreference(!isVideoMutedByDefault)}
                         post={post}
                       />
                     </RevealPost>

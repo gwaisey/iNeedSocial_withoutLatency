@@ -196,6 +196,29 @@ async function waitForRenderedImageMedia(page: Page, postId: string) {
   }, postId)
 }
 
+async function waitForRenderedVideoMedia(page: Page, postId: string) {
+  await page.waitForFunction((targetPostId) => {
+    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
+    if (!post) {
+      return false
+    }
+
+    const video = post.querySelector("video")
+    if (!(video instanceof HTMLVideoElement)) {
+      return false
+    }
+
+    const style = window.getComputedStyle(video)
+    return style.opacity !== "0" && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+  }, postId)
+}
+
+async function scrollPostIntoView(page: Page, postId: string) {
+  const post = page.locator(`[data-regular-post-id="${postId}"]`)
+  await post.scrollIntoViewIfNeeded()
+  await expect(post).toBeVisible()
+}
+
 async function seedActiveStudySession(page: Page, sessionId: string) {
   await page.addInitScript((targetSessionId) => {
     window.sessionStorage.setItem("ineedsocial:study:active-session", targetSessionId)
@@ -622,6 +645,69 @@ test("theme switch preserves carousel slide state", async ({ page }) => {
 
   await expect(carouselIndicator).toHaveText("2/3")
   expect(Math.abs((await getFeedScrollTop(page)) - scrollTopBeforeToggle)).toBeLessThan(180)
+})
+
+test("video mute preference stays session-scoped across later videos", async ({ page }) => {
+  await startStudy(page)
+  await dismissTutorialIfVisible(page)
+
+  await scrollPostIntoView(page, "post-video-sample")
+  await waitForRenderedVideoMedia(page, "post-video-sample")
+  const firstVideoMuteButton = page.getByTestId("mute-button-post-video-sample")
+  await expect(firstVideoMuteButton).toHaveAttribute("data-muted", "true")
+
+  await firstVideoMuteButton.click()
+  await expect(firstVideoMuteButton).toHaveAttribute("data-muted", "false")
+
+  await scrollPostIntoView(page, "post-kopi-kak")
+  await waitForRenderedVideoMedia(page, "post-kopi-kak")
+  const secondVideoMuteButton = page.getByTestId("mute-button-post-kopi-kak")
+  await expect(secondVideoMuteButton).toHaveAttribute("data-muted", "false")
+
+  await secondVideoMuteButton.click()
+  await expect(secondVideoMuteButton).toHaveAttribute("data-muted", "true")
+
+  await scrollPostIntoView(page, "post-cewe-impulsif")
+  await expect(page.getByTestId("mute-button-post-cewe-impulsif")).toHaveAttribute(
+    "data-muted",
+    "true"
+  )
+
+  await page.getByTestId("sidebar-exit-button").click()
+  await page.getByTestId("exit-session-confirm-button").click()
+  await page.waitForURL("**/welcome")
+
+  await page.getByTestId("start-study-button").click()
+  await page.waitForURL("**/feed?theme=light")
+  await dismissTutorialIfVisible(page)
+  await scrollPostIntoView(page, "post-video-sample")
+  await expect(page.getByTestId("mute-button-post-video-sample")).toHaveAttribute(
+    "data-muted",
+    "true"
+  )
+})
+
+test("refresh resets video autoplay-with-sound while keeping videos rendering", async ({ page }) => {
+  await startStudy(page)
+  await dismissTutorialIfVisible(page)
+
+  await scrollPostIntoView(page, "post-video-sample")
+  await waitForRenderedVideoMedia(page, "post-video-sample")
+
+  const muteButton = page.getByTestId("mute-button-post-video-sample")
+  await expect(muteButton).toHaveAttribute("data-muted", "true")
+  await muteButton.click()
+  await expect(muteButton).toHaveAttribute("data-muted", "false")
+
+  await page.reload()
+  await page.waitForURL("**/feed?theme=light")
+  await dismissTutorialIfVisible(page)
+  await scrollPostIntoView(page, "post-video-sample")
+  await waitForRenderedVideoMedia(page, "post-video-sample")
+  await expect(page.getByTestId("mute-button-post-video-sample")).toHaveAttribute(
+    "data-muted",
+    "true"
+  )
 })
 
 test("keluar clears a seeded session and forces a fresh restart", async ({ page }) => {
