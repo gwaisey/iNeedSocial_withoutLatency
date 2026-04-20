@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { SessionReportPayload } from "../types/social"
 import {
+  isDuplicateSessionSaveError,
   isRetryableSaveError,
   saveSessionDataWithClient,
   type FeedSessionsClient,
@@ -26,7 +27,6 @@ const payload: SessionReportPayload = {
 
 function createFeedSessionsClient(responses: SaveResponse[]) {
   const calls: Array<{
-    options: { onConflict: string }
     values: SessionReportPayload[]
   }> = []
 
@@ -35,14 +35,9 @@ function createFeedSessionsClient(responses: SaveResponse[]) {
       expect(table).toBe("feed_sessions")
 
       return {
-        upsert(values, options) {
-          calls.push({ options, values })
-
-          return {
-            async select() {
-              return responses.shift() ?? { data: null, error: null }
-            },
-          }
+        async insert(values) {
+          calls.push({ values })
+          return responses.shift() ?? { data: null, error: null }
         },
       }
     },
@@ -56,13 +51,12 @@ describe("supabase session saves", () => {
     vi.useRealTimers()
   })
 
-  it("uses session_id upsert to keep saves idempotent", async () => {
+  it("uses insert-only writes for feed session saves", async () => {
     const { calls, client } = createFeedSessionsClient([{ data: [payload], error: null }])
 
     await expect(saveSessionDataWithClient(client, payload)).resolves.toEqual([payload])
     expect(calls).toEqual([
       {
-        options: { onConflict: "session_id" },
         values: [payload],
       },
     ])
@@ -90,5 +84,19 @@ describe("supabase session saves", () => {
     await expect(saveSessionDataWithClient(client, payload)).rejects.toBe(error)
     expect(calls).toHaveLength(1)
     expect(isRetryableSaveError(error)).toBe(false)
+  })
+
+  it("treats duplicate session_id conflicts as an idempotent success", async () => {
+    const duplicateError = {
+      code: "23505",
+      details: "Key (session_id)=(study_test_session) already exists.",
+      message: "duplicate key value violates unique constraint",
+      status: 409,
+    }
+    const { calls, client } = createFeedSessionsClient([{ data: null, error: duplicateError }])
+
+    await expect(saveSessionDataWithClient(client, payload)).resolves.toBeNull()
+    expect(calls).toHaveLength(1)
+    expect(isDuplicateSessionSaveError(duplicateError)).toBe(true)
   })
 })

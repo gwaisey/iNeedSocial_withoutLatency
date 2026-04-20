@@ -64,7 +64,7 @@ npm run preview
 
 ## Variabel Lingkungan
 
-Salin `.env.example` menjadi `.env`, lalu isi sesuai kebutuhan.
+Salin `.env.example` menjadi `.env` untuk pengembangan lokal. Untuk deployment produksi, gunakan `.env.production.example` sebagai template variabel yang perlu diisi di platform hosting.
 
 ### Variabel frontend untuk aplikasi peserta
 
@@ -83,14 +83,16 @@ Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `m
 
 Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Status penyimpanan sesi akan tetap ditampilkan secara non-blocking di halaman terima kasih.
 
-### Variabel privat untuk ekspor admin
+### Variabel privat untuk ekspor admin / server
 
 ```bash
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` hanya dipakai oleh skrip admin lokal. Jangan pernah mengekspos nilai ini ke browser, menyimpannya di kode frontend, atau meng-commit-nya ke git.
+`SUPABASE_SERVICE_ROLE_KEY` hanya dipakai oleh skrip admin lokal atau proses server-side. Jangan pernah mengekspos nilai ini ke browser, menyimpannya di kode frontend, atau meng-commit-nya ke git.
+
+Jika nilai key produksi pernah terekspos di luar pengaturan rahasia hosting, rotasi key harus dilakukan langsung di Supabase/Vercel. Repo ini hanya menyediakan template variabel, bukan mekanisme rotasi key.
 
 ## Alur Studi
 
@@ -147,7 +149,8 @@ Aliran post yang sama digunakan untuk mode terang dan gelap. Konten stimulus pen
 - Halaman terima kasih menampilkan status penyimpanan sesi dan kode sesi hanya jika penyimpanan berhasil.
 - Jika penyimpanan gagal, halaman terima kasih menyediakan tombol retry tanpa mengembalikan peserta ke feed.
 - Ekspor seluruh sesi tidak tersedia di UI peserta.
-- Penyimpanan sesi peserta sekarang bersifat idempoten berdasarkan `session_id`, sehingga refresh atau retry tidak membuat baris duplikat jika migrasi database sudah diterapkan.
+- Penyimpanan sesi peserta memakai publishable key frontend dengan akses database yang dibatasi oleh RLS insert-only pada tabel `feed_sessions`.
+- Retry penyimpanan tetap aman secara idempoten berdasarkan `session_id`, sehingga retry setelah save yang sempat berhasil tidak menambah baris duplikat jika migrasi database sudah diterapkan.
 
 ### Ekspor semua sesi untuk admin
 
@@ -196,4 +199,5 @@ scripts/
 - Error runtime yang aman untuk pengguna tetap ditampilkan secara lokal, sementara error mentah dicatat ke `console.error` untuk debugging.
 - Output build di `dist/`, file `.env`, log lokal Vite, `*.tsbuildinfo`, dan output config hasil generate tidak boleh dilacak di git.
 - Jika file-file terabaikan tersebut pernah ter-commit, bersihkan index git saat ini dan rewrite history repo agar artefak serta secret lama benar-benar terhapus.
-- Terapkan migrasi `supabase/migrations/202604130900_feed_sessions_session_id_unique.sql` agar tabel `feed_sessions` memiliki constraint unik pada `session_id` dan duplikasi lama dibersihkan sebelum upsert client dijalankan penuh.
+- Terapkan migrasi `supabase/migrations/202604130900_feed_sessions_session_id_unique.sql` agar tabel `feed_sessions` memiliki constraint unik pada `session_id` dan duplikasi lama dibersihkan sebelum save client insert-only dijalankan penuh.
+- Terapkan migrasi `supabase/migrations/202604200900_feed_sessions_rls.sql` setelah constraint unik sudah aktif agar akses client ke `feed_sessions` dibatasi menjadi insert-only dan pembacaan anonim tidak lagi terbuka.

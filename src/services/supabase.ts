@@ -8,8 +8,9 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ""
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? ""
 
 type FeedSessionsSaveData = SessionReportPayload[] | null
-
 type FeedSessionsSaveError = Error | {
+  code?: string
+  details?: string
   message?: string
   status?: number
 } | null
@@ -23,14 +24,7 @@ type SaveResponsePromise = PromiseLike<SaveResponse>
 
 export type FeedSessionsClient = {
   from: (table: "feed_sessions") => {
-    upsert: (
-      values: SessionReportPayload[],
-      options: {
-        onConflict: string
-      }
-    ) => {
-      select: () => SaveResponsePromise
-    }
+    insert: (values: SessionReportPayload[]) => SaveResponsePromise
   }
 }
 
@@ -81,6 +75,15 @@ function extractErrorStatus(error: unknown) {
   return typeof status === "number" ? status : null
 }
 
+function extractErrorText(error: unknown, key: "code" | "details" | "message") {
+  if (typeof error !== "object" || error === null) {
+    return null
+  }
+
+  const value = Reflect.get(error, key)
+  return typeof value === "string" ? value : null
+}
+
 export function isRetryableSaveError(error: unknown) {
   if (error instanceof TypeError) {
     return true
@@ -94,6 +97,24 @@ export function isRetryableSaveError(error: unknown) {
   return status !== null ? RETRYABLE_STATUS_CODES.has(status) : false
 }
 
+export function isDuplicateSessionSaveError(error: unknown) {
+  const code = extractErrorText(error, "code")
+  const details = extractErrorText(error, "details")
+  const message = extractErrorText(error, "message")
+  const status = extractErrorStatus(error)
+  const combinedText = [details, message].filter(Boolean).join(" ")
+
+  if (code === "23505") {
+    return /session_id|duplicate|unique/i.test(combinedText)
+  }
+
+  if (status === 409) {
+    return /session_id|duplicate|unique/i.test(combinedText)
+  }
+
+  return false
+}
+
 export function getSupabaseStatusMessage() {
   return supabaseConfigError
 }
@@ -105,12 +126,10 @@ export async function saveSessionDataWithClient(
   let lastError: FeedSessionsSaveError = null
 
   for (let attempt = 0; attempt <= SAVE_RETRY_DELAYS_MS.length; attempt += 1) {
-    const { data, error } = await client
-      .from("feed_sessions")
-      .upsert([payload], { onConflict: "session_id" })
-      .select()
+    const { data, error } = await client.from("feed_sessions").insert([payload])
 
-    if (!error) {
+    // With insert-only RLS, a duplicate session_id means a prior save already won.
+    if (!error || isDuplicateSessionSaveError(error)) {
       return data
     }
 
