@@ -1,34 +1,26 @@
 import { type Post } from "../types/social"
 import { useFeedCarousel } from "../hooks/use-feed-carousel"
+import { AutoPlayVideo } from "./auto-play-video"
 import {
-  AutoPlayVideo,
   CarouselDots,
   CarouselNavButton,
   CarouselSlideCounter,
   MediaMuteButton,
-  ProgressiveImage,
-} from "./feed-post-media-primitives"
-import { isVideoSource } from "./feed-post-media-utils"
+} from "./feed-post-carousel-controls"
+import { ProgressiveImage } from "./progressive-image"
+import {
+  buildVideoAspectRatioHeight,
+  buildImageAspectRatioHeight,
+  getMediaSurfaceTokens,
+  isVideoSource,
+  type MediaSurfaceTokens,
+} from "./feed-post-media-utils"
 
 type FeedPostMediaProps = {
   readonly isDark: boolean
   readonly isMuted: boolean
   readonly onToggleMute: () => void
   readonly post: Post
-}
-
-type MediaSurfaceTokens = {
-  placeholder: string
-  skeletonTone: string
-  surface: string
-}
-
-function getMediaSurfaceTokens(isDark: boolean): MediaSurfaceTokens {
-  return {
-    placeholder: isDark ? "bg-white/8" : "bg-ink/8",
-    skeletonTone: isDark ? "skeleton-dark" : "",
-    surface: isDark ? "bg-white/8" : "bg-ink/8",
-  }
 }
 
 function FeedPostVideoMedia({
@@ -105,9 +97,7 @@ function FeedPostCarouselMedia({
               isActive={index === activeIdx}
               isMuted={isMuted}
               onLoadedMetadata={(event) => {
-                const video = event.currentTarget
-                const height = (video.clientWidth * video.videoHeight) / video.videoWidth
-                updateSlideHeight(index, height)
+                updateSlideHeight(index, buildVideoAspectRatioHeight(event.currentTarget))
               }}
               placeholderClassName={tokens.placeholder}
               poster={item.poster}
@@ -121,8 +111,7 @@ function FeedPostCarouselMedia({
               alt={item.alt}
               className="w-full h-auto shrink-0"
               onLoad={(image) => {
-                const height = (image.clientWidth * image.naturalHeight) / image.naturalWidth
-                updateSlideHeight(index, height)
+                updateSlideHeight(index, buildImageAspectRatioHeight(image))
               }}
               placeholderClassName={tokens.placeholder}
               priority={Math.abs(index - activeIdx) <= 1 ? "high" : "low"}
