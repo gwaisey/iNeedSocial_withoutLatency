@@ -74,4 +74,77 @@ describe("feed-service helpers", () => {
       })
     )
   })
+
+  it("rejects image posts that point at video media sources", () => {
+    expect(() =>
+      validateFeedPayload({
+        posts: [
+          {
+            id: "post-video-image-mismatch",
+            type: "image",
+            username: "uji",
+            likes: "10",
+            caption: "uji",
+            media: [{ src: "/content/videos/sample.mp4", alt: "uji" }],
+            genre: "humor",
+          },
+        ],
+      })
+    ).toThrow("Format feed tidak valid.")
+  })
+
+  it("rejects video posts that point at non-video media sources", () => {
+    expect(() =>
+      validateFeedPayload({
+        posts: [
+          {
+            id: "post-image-video-mismatch",
+            type: "video",
+            username: "uji",
+            likes: "10",
+            caption: "uji",
+            media: [{ src: "/content/files/sample.jpg", alt: "uji" }],
+            genre: "humor",
+          },
+        ],
+      })
+    ).toThrow("Format feed tidak valid.")
+  })
+
+  it("allows mixed-media carousels while rejecting single-item carousels", () => {
+    expect(() =>
+      validateFeedPayload({
+        posts: [
+          {
+            id: "post-carousel-mixed",
+            type: "carousel",
+            username: "uji",
+            likes: "10",
+            caption: "uji",
+            media: [
+              { src: "/content/videos/sample.mp4", alt: "video" },
+              { src: "/content/files/sample.jpg", alt: "image" },
+            ],
+            genre: "humor",
+          },
+        ],
+      })
+    ).not.toThrow()
+
+    expect(() =>
+      validateFeedPayload({
+        posts: [
+          {
+            id: "post-carousel-single",
+            type: "carousel",
+            username: "uji",
+            likes: "10",
+            caption: "uji",
+            media: [{ src: "/content/files/sample.jpg", alt: "image" }],
+            genre: "humor",
+          },
+        ],
+      })
+    ).toThrow("Format feed tidak valid.")
+  })
 })
