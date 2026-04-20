@@ -18,6 +18,38 @@ type RawFeedPayload = {
   posts: RawPost[]
 }
 
+function isVideoMediaSource(src: string) {
+  return /\.mp4($|\?)/i.test(src)
+}
+
+function validatePostMediaShape(post: RawPost, context: z.RefinementCtx) {
+  const mediaKinds = post.media.map((item) => isVideoMediaSource(item.src))
+
+  if (post.type === "image" && mediaKinds.some(Boolean)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Image posts cannot include video media.",
+      path: ["media"],
+    })
+  }
+
+  if (post.type === "video" && mediaKinds.some((isVideo) => !isVideo)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Video posts must use video media sources.",
+      path: ["media"],
+    })
+  }
+
+  if (post.type === "carousel" && post.media.length < 2) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Carousel posts must contain at least two media items.",
+      path: ["media"],
+    })
+  }
+}
+
 const rawMediaSchema = z
   .object({
     src: z.string().min(1),
@@ -37,6 +69,7 @@ const rawPostSchema = z
     genre: z.string().nullable().optional(),
   })
   .strict()
+  .superRefine(validatePostMediaShape)
 
 const rawFeedPayloadSchema = z
   .object({

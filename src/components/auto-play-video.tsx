@@ -12,6 +12,31 @@ import {
   unregisterVideoPreloadCandidate,
   updateVideoPreloadCandidate,
 } from "../utils/video-preload-budget"
+import {
+  DEFAULT_VIDEO_ASPECT_RATIO,
+  getKnownVideoAspectRatio,
+  getNormalizedVideoSource,
+  getVideoPosterSource,
+  rememberVideoAspectRatio,
+  VIDEO_EARLY_LOAD_DISTANCE_PX,
+  VIDEO_PRELOAD_ROOT_MARGIN,
+  VIDEO_READY_STATE_CURRENT_DATA,
+} from "./auto-play-video-config"
+import { scheduleFirstRenderableVideoFrame } from "./auto-play-video-frame"
+import {
+  buildVideoAspectRatio,
+  deriveVideoViewportState,
+  getVideoPlaybackDecision,
+  getViewportBounds,
+  shouldEarlyLoadNearViewport,
+  shouldEnsureViewportData,
+  shouldForceAutoPreload,
+} from "./auto-play-video-state"
+import {
+  registerVideoPlaybackCandidate,
+  unregisterVideoPlaybackCandidate,
+  updateVideoPlaybackCandidate,
+} from "./video-playback-coordinator"
 
 type AutoPlayVideoProps = {
   readonly className: string
@@ -27,38 +52,65 @@ type AutoPlayVideoProps = {
   readonly src?: string
 }
 
-const VIDEO_PRELOAD_ROOT_MARGIN = "2400px 0px"
-const VIDEO_AUTO_PRELOAD_DISTANCE_PX = 720
+type ViewportSubscriber = () => void
 
-function getDistanceToViewport(
-  rootTop: number,
-  rootBottom: number,
-  targetTop: number,
-  targetBottom: number
-) {
-  if (targetBottom < rootTop) {
-    return rootTop - targetBottom
+const viewportSubscribers = new Set<ViewportSubscriber>()
+let viewportScrollHandler: (() => void) | null = null
+let viewportAnimationFrame: number | null = null
+
+function scheduleViewportSubscribers() {
+  if (viewportAnimationFrame !== null) {
+    return
   }
 
-  if (targetTop > rootBottom) {
-    return targetTop - rootBottom
-  }
-
-  return 0
+  viewportAnimationFrame = window.requestAnimationFrame(() => {
+    viewportAnimationFrame = null
+    viewportSubscribers.forEach((subscriber) => subscriber())
+  })
 }
 
-function classifyVideoPlayError(error: unknown): "ignore" | "unexpected" {
+function subscribeToViewportEvents(subscriber: ViewportSubscriber) {
+  viewportSubscribers.add(subscriber)
+
+  if (!viewportScrollHandler) {
+    viewportScrollHandler = scheduleViewportSubscribers
+    document.addEventListener("scroll", viewportScrollHandler, { passive: true, capture: true })
+    window.addEventListener("scroll", viewportScrollHandler, { passive: true })
+    window.addEventListener("resize", viewportScrollHandler)
+  }
+
+  return () => {
+    viewportSubscribers.delete(subscriber)
+    if (viewportSubscribers.size > 0 || !viewportScrollHandler) {
+      return
+    }
+
+    document.removeEventListener("scroll", viewportScrollHandler, true)
+    window.removeEventListener("scroll", viewportScrollHandler)
+    window.removeEventListener("resize", viewportScrollHandler)
+    viewportScrollHandler = null
+
+    if (viewportAnimationFrame !== null) {
+      window.cancelAnimationFrame(viewportAnimationFrame)
+      viewportAnimationFrame = null
+    }
+  }
+}
+
+function classifyVideoPlayError(error: unknown): "blocked" | "interrupted" | "unexpected" {
   if (!(error instanceof Error)) {
     return "unexpected"
   }
 
-  if (error.name === "AbortError" || error.name === "NotAllowedError") {
-    return "ignore"
+  if (error.name === "AbortError" || /interrupted/i.test(error.message)) {
+    return "interrupted"
   }
 
-  return /autoplay|interrupted|user didn'?t interact/i.test(error.message)
-    ? "ignore"
-    : "unexpected"
+  if (error.name === "NotAllowedError" || /autoplay|user didn'?t interact/i.test(error.message)) {
+    return "blocked"
+  }
+
+  return "unexpected"
 }
 
 export function AutoPlayVideo({
@@ -74,64 +126,109 @@ export function AutoPlayVideo({
   scrollRootRef,
   src,
 }: AutoPlayVideoProps) {
+  const normalizedSrc = getNormalizedVideoSource(src)
+  const resolvedPoster = getVideoPosterSource(normalizedSrc, poster)
+  const hasVideoSource = Boolean(normalizedSrc)
   const preloadCandidateId = useId()
+  const playbackCandidateId = useId()
   const shellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const lastUnexpectedPlayErrorRef = useRef<string | null>(null)
+  const frameReadyCleanupRef = useRef<(() => void) | null>(null)
+  const hasQueuedFrameReadyRef = useRef(false)
+  const lastReportedLoadIssueRef = useRef<string | null>(null)
+  const lastReportedPlayIssueRef = useRef<string | null>(null)
+  const previousSourceRef = useRef(normalizedSrc)
+  const wasVisibleRef = useRef(false)
   const [canUseAutoPreload, setCanUseAutoPreload] = useState(false)
+  const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
+  const [playbackPriority, setPlaybackPriority] = useState(Number.POSITIVE_INFINITY)
   const [distanceToViewport, setDistanceToViewport] = useState(Number.POSITIVE_INFINITY)
+  const isNearViewport = distanceToViewport <= VIDEO_EARLY_LOAD_DISTANCE_PX
   const [hasLoadedFrame, setHasLoadedFrame] = useState(false)
-  const [isNearViewport, setIsNearViewport] = useState(false)
+  const [isInViewport, setIsInViewport] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [shouldMountVideo, setShouldMountVideo] = useState(false)
+  const [shellAspectRatio, setShellAspectRatio] = useState(
+    () => getKnownVideoAspectRatio(normalizedSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO
+  )
+  const hasForcedPreloadRef = useRef(false)
+  const hasEnsuredViewportDataRef = useRef(false)
 
   useEffect(() => {
+    if (!hasVideoSource) {
+      setCanUseAutoPreload(false)
+      return
+    }
+
     registerVideoPreloadCandidate(preloadCandidateId, setCanUseAutoPreload)
 
     return () => {
       unregisterVideoPreloadCandidate(preloadCandidateId)
     }
-  }, [preloadCandidateId])
+  }, [hasVideoSource, preloadCandidateId])
 
   useEffect(() => {
+    if (!hasVideoSource) {
+      setIsPlaybackOwner(false)
+      return
+    }
+
+    registerVideoPlaybackCandidate(playbackCandidateId, setIsPlaybackOwner)
+
+    return () => {
+      unregisterVideoPlaybackCandidate(playbackCandidateId)
+    }
+  }, [hasVideoSource, playbackCandidateId])
+
+  useEffect(() => {
+    if (!hasVideoSource) {
+      return
+    }
+
     updateVideoPreloadCandidate(preloadCandidateId, {
       canPrewarm: canPrewarm && shouldMountVideo,
       distancePx: distanceToViewport,
     })
-  }, [canPrewarm, distanceToViewport, preloadCandidateId, shouldMountVideo])
+  }, [canPrewarm, distanceToViewport, hasVideoSource, preloadCandidateId, shouldMountVideo])
 
   useEffect(() => {
+    if (!hasVideoSource) {
+      return
+    }
+
+    updateVideoPlaybackCandidate(playbackCandidateId, {
+      priority: playbackPriority,
+      shouldOwnPlayback: hasVideoSource && shouldMountVideo && isActive && isVisible,
+    })
+  }, [
+    hasVideoSource,
+    isActive,
+    isVisible,
+    playbackCandidateId,
+    playbackPriority,
+    shouldMountVideo,
+  ])
+
+  useEffect(() => {
+    if (!hasVideoSource) {
+      return
+    }
+
     const shell = shellRef.current
     if (!shell) {
       return
     }
 
-    const observerRoot = scrollRootRef?.current ?? null
-
+    // Prewarm observer: large rootMargin to mount early, but do NOT use it for play/pause decisions.
     const observer = new IntersectionObserver(
       ([entry]) => {
-        const rootTop = entry.rootBounds?.top ?? 0
-        const rootBottom = entry.rootBounds?.bottom ?? window.innerHeight
-        const distancePx = getDistanceToViewport(
-          rootTop,
-          rootBottom,
-          entry.boundingClientRect.top,
-          entry.boundingClientRect.bottom
-        )
-        const isInViewport =
-          entry.boundingClientRect.bottom > rootTop && entry.boundingClientRect.top < rootBottom
-
-        setDistanceToViewport(distancePx)
-        setIsNearViewport(entry.isIntersecting)
-        setIsVisible(isInViewport)
-        if (isInViewport || (entry.isIntersecting && canPrewarm)) {
+        if (entry.isIntersecting && canPrewarm) {
           setShouldMountVideo(true)
         }
       },
       {
-        root: observerRoot,
         rootMargin: VIDEO_PRELOAD_ROOT_MARGIN,
-        threshold: [0, 0.2],
+        threshold: 0,
       }
     )
 
@@ -140,21 +237,76 @@ export function AutoPlayVideo({
     return () => {
       observer.disconnect()
     }
-  }, [canPrewarm, scrollRootRef])
+  }, [canPrewarm, hasVideoSource])
 
   useEffect(() => {
-    if (canPrewarm && isNearViewport) {
-      setShouldMountVideo(true)
+    if (!hasVideoSource || !shouldMountVideo) {
+      return
     }
-  }, [canPrewarm, isNearViewport])
+
+    const shell = shellRef.current
+    if (!shell) {
+      return
+    }
+
+    const updateViewportState = () => {
+      const root = scrollRootRef?.current ?? null
+      const { top: rootTop, bottom: rootBottom } = getViewportBounds(root)
+      const shellRect = shell.getBoundingClientRect()
+      const nextViewportState = deriveVideoViewportState({
+        rootBottom,
+        rootTop,
+        targetBottom: shellRect.bottom,
+        targetTop: shellRect.top,
+        wasVisible: wasVisibleRef.current,
+      })
+
+      wasVisibleRef.current = nextViewportState.isVisible
+      setPlaybackPriority(nextViewportState.centerOffset)
+      setDistanceToViewport(nextViewportState.distanceToViewport)
+      setIsInViewport(nextViewportState.isInViewport)
+      setIsVisible(nextViewportState.isVisible)
+    }
+
+    updateViewportState()
+    const unsubscribe = subscribeToViewportEvents(updateViewportState)
+
+    return () => {
+      unsubscribe()
+    }
+  }, [hasVideoSource, scrollRootRef, shouldMountVideo])
 
   useEffect(() => {
+    return () => {
+      frameReadyCleanupRef.current?.()
+      frameReadyCleanupRef.current = null
+      hasQueuedFrameReadyRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (previousSourceRef.current === normalizedSrc) {
+      return
+    }
+
+    previousSourceRef.current = normalizedSrc
+    frameReadyCleanupRef.current?.()
+    frameReadyCleanupRef.current = null
+    hasQueuedFrameReadyRef.current = false
     setHasLoadedFrame(false)
+    setShellAspectRatio(getKnownVideoAspectRatio(normalizedSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO)
     setShouldMountVideo(false)
-    setCanUseAutoPreload(false)
+    setPlaybackPriority(Number.POSITIVE_INFINITY)
+    setIsPlaybackOwner(false)
     setDistanceToViewport(Number.POSITIVE_INFINITY)
-    lastUnexpectedPlayErrorRef.current = null
-  }, [src])
+    setIsInViewport(false)
+    setIsVisible(false)
+    wasVisibleRef.current = false
+    hasForcedPreloadRef.current = false
+    hasEnsuredViewportDataRef.current = false
+    lastReportedLoadIssueRef.current = null
+    lastReportedPlayIssueRef.current = null
+  }, [normalizedSrc])
 
   useEffect(() => {
     const video = videoRef.current
@@ -169,90 +321,289 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !shouldMountVideo) {
+    if (
+      !video ||
+      !hasVideoSource ||
+      !shouldMountVideo ||
+      hasLoadedFrame ||
+      video.readyState < VIDEO_READY_STATE_CURRENT_DATA
+    ) {
+      return
+    }
+
+    if (hasQueuedFrameReadyRef.current) {
+      return
+    }
+
+    hasQueuedFrameReadyRef.current = true
+    frameReadyCleanupRef.current = scheduleFirstRenderableVideoFrame(video, () => {
+      frameReadyCleanupRef.current = null
+      hasQueuedFrameReadyRef.current = false
+      setHasLoadedFrame(true)
+    })
+  }, [hasLoadedFrame, hasVideoSource, shouldMountVideo])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !hasVideoSource || !shouldMountVideo) {
+      return
+    }
+
+    const attemptVideoLoad = (stage: "near-viewport" | "prewarm" | "viewport") => {
+      try {
+        video.load()
+      } catch (error) {
+        const signature = `${stage}:${error instanceof Error ? `${error.name}:${error.message}` : String(error)}`
+
+        if (lastReportedLoadIssueRef.current === signature) {
+          return
+        }
+
+        lastReportedLoadIssueRef.current = signature
+        reportRuntimeIssue({
+          error,
+          level: "warn",
+          message:
+            stage === "viewport"
+              ? "Video viewport load failed."
+              : "Video prewarm load failed.",
+          metadata: {
+            distanceToViewport,
+            isActive,
+            isInViewport,
+            isMuted,
+            isVisible,
+            src: normalizedSrc,
+            stage,
+          },
+          scope: "video-playback",
+        })
+      }
+    }
+
+    if (
+      shouldEnsureViewportData({
+        hasEnsuredViewportData: hasEnsuredViewportDataRef.current,
+        isInViewport,
+        isPaused: video.paused,
+        readyState: video.readyState,
+      })
+    ) {
+      // When a post is scrolled into view, ensure we have at least one frame so
+      // placeholders can fade out even before autoplay kicks in.
+      hasEnsuredViewportDataRef.current = true
+      attemptVideoLoad("viewport")
       return
     }
 
     if (
-      canUseAutoPreload ||
-      isVisible ||
-      distanceToViewport <= VIDEO_AUTO_PRELOAD_DISTANCE_PX ||
-      video.readyState < HTMLMediaElement.HAVE_METADATA
+      shouldEarlyLoadNearViewport({
+        distanceToViewport,
+        hasLoadedFrame,
+        isActive,
+        readyState: video.readyState,
+      })
     ) {
-      video.load()
+      hasForcedPreloadRef.current = true
+      attemptVideoLoad("near-viewport")
+      return
     }
-  }, [canUseAutoPreload, distanceToViewport, isVisible, shouldMountVideo, src])
+
+    if (
+      !shouldForceAutoPreload({
+        canUseAutoPreload,
+        hasForcedPreload: hasForcedPreloadRef.current,
+        isInViewport,
+        isVisible,
+        readyState: video.readyState,
+      })
+    ) {
+      return
+    }
+
+    // Some browsers are conservative about upgrading `preload` after mount; force
+    // a one-time load only for budget-selected prewarm candidates. Avoid doing
+    // this while the video is visible/playing to prevent aborting playback.
+    hasForcedPreloadRef.current = true
+    attemptVideoLoad("prewarm")
+  }, [
+    canUseAutoPreload,
+    distanceToViewport,
+    hasLoadedFrame,
+    hasVideoSource,
+    isActive,
+    isInViewport,
+    isMuted,
+    isVisible,
+    normalizedSrc,
+    shouldMountVideo,
+  ])
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video) {
+    if (!video || !hasVideoSource) {
       return
     }
 
-    if (!isVisible || !isActive) {
+    const playbackDecision = getVideoPlaybackDecision({
+      currentTime: video.currentTime,
+      distanceToViewport,
+      isActive,
+      isInViewport,
+      isPlaybackOwner,
+      isPaused: video.paused,
+      isVisible,
+    })
+
+    if (playbackDecision.shouldPause) {
       video.pause()
+    }
+
+    if (playbackDecision.shouldReset) {
+      try {
+        video.currentTime = 0
+      } catch {
+        // Ignore browsers that disallow currentTime changes before metadata loads.
+      }
+    }
+
+    if (!playbackDecision.shouldPlay) {
       return
+    }
+
+    if (!video.paused) {
+      return
+    }
+
+    const shouldStartMuted = !isMuted
+    if (shouldStartMuted) {
+      video.defaultMuted = true
+      video.muted = true
+      video.volume = 0
     }
 
     const playPromise = video.play()
+    if (!playPromise || typeof playPromise.then !== "function") {
+      return
+    }
+
+    playPromise.then(() => {
+      if (!hasLoadedFrame && !hasQueuedFrameReadyRef.current) {
+        hasQueuedFrameReadyRef.current = true
+        frameReadyCleanupRef.current = scheduleFirstRenderableVideoFrame(video, () => {
+          frameReadyCleanupRef.current = null
+          hasQueuedFrameReadyRef.current = false
+          setHasLoadedFrame(true)
+        })
+      }
+
+      if (!shouldStartMuted) {
+        return
+      }
+
+      video.defaultMuted = isMuted
+      video.muted = isMuted
+      video.volume = isMuted ? 0 : 1
+    })
     playPromise.catch((error) => {
-      if (classifyVideoPlayError(error) !== "unexpected") {
-        return
-      }
-
+      const classification = classifyVideoPlayError(error)
       const signature =
-        error instanceof Error ? `${error.name}:${error.message}` : String(error)
+        `${classification}:${error instanceof Error ? `${error.name}:${error.message}` : String(error)}`
 
-      if (lastUnexpectedPlayErrorRef.current === signature) {
+      if (lastReportedPlayIssueRef.current === signature) {
         return
       }
 
-      lastUnexpectedPlayErrorRef.current = signature
+      lastReportedPlayIssueRef.current = signature
       reportRuntimeIssue({
         error,
         level: "warn",
-        message: "Unexpected video autoplay failure.",
+        message:
+          classification === "unexpected"
+            ? "Unexpected video autoplay failure."
+            : "Video autoplay was blocked or interrupted.",
         metadata: {
-          src,
+          classification,
+          distanceToViewport,
+          isActive,
+          isInViewport,
+          isMuted,
+          isVisible,
+          src: normalizedSrc,
+          stage: "autoplay",
         },
         scope: "video-playback",
       })
     })
-  }, [isActive, isVisible, src])
+  }, [
+    distanceToViewport,
+    hasLoadedFrame,
+    hasVideoSource,
+    isActive,
+    isInViewport,
+    isPlaybackOwner,
+    isMuted,
+    isVisible,
+    normalizedSrc,
+    shouldMountVideo,
+  ])
 
   return (
     <div
       ref={shellRef}
-      className={`relative overflow-hidden ${placeholderClassName} ${shellClassName} ${hasLoadedFrame ? "" : "aspect-[4/5]"}`}
+      className={`relative w-full overflow-hidden ${placeholderClassName} ${shellClassName}`}
+      style={{ aspectRatio: shellAspectRatio }}
     >
       {!hasLoadedFrame && (
-        <div className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`} />
+        <div
+          className={`absolute inset-0 ${shouldMountVideo ? "" : "skeleton"} ${skeletonClassName} ${placeholderClassName}`}
+        />
       )}
-      {poster && !hasLoadedFrame && (
+      {resolvedPoster && !hasLoadedFrame && (
         <img
           alt=""
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover"
           decoding="async"
-          src={poster}
+          src={resolvedPoster}
         />
       )}
-      {shouldMountVideo && (
+      {hasVideoSource && shouldMountVideo && (
         <video
           ref={videoRef}
-          autoPlay
-          className={`${className} transition-opacity duration-200 ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
+          className={`${className} absolute inset-0 h-full w-full ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
           loop
           muted={isMuted}
-          onLoadedData={() => setHasLoadedFrame(true)}
+          onLoadedData={(event) => {
+            if (!hasQueuedFrameReadyRef.current) {
+              hasQueuedFrameReadyRef.current = true
+              frameReadyCleanupRef.current = scheduleFirstRenderableVideoFrame(
+                event.currentTarget,
+                () => {
+                  frameReadyCleanupRef.current = null
+                  hasQueuedFrameReadyRef.current = false
+                  setHasLoadedFrame(true)
+                }
+              )
+            }
+          }}
           onLoadedMetadata={(event) => {
-            setHasLoadedFrame(true)
+            const learnedAspectRatio = buildVideoAspectRatio({
+              videoHeight: event.currentTarget.videoHeight,
+              videoWidth: event.currentTarget.videoWidth,
+            })
+
+            if (learnedAspectRatio) {
+              rememberVideoAspectRatio(normalizedSrc, learnedAspectRatio)
+              setShellAspectRatio(learnedAspectRatio)
+            }
+
             onLoadedMetadata?.(event)
           }}
           playsInline
-          poster={poster}
-          preload={canUseAutoPreload || isVisible ? "auto" : "metadata"}
-          src={src}
+          poster={resolvedPoster}
+          preload={canUseAutoPreload || isInViewport || isNearViewport || isVisible ? "auto" : "metadata"}
+          src={normalizedSrc}
         />
       )}
     </div>

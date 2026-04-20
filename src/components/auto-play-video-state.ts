@@ -1,0 +1,223 @@
+import {
+  VIDEO_EARLY_LOAD_DISTANCE_PX,
+  VIDEO_PLAY_START_OVERLAP_PX,
+  VIDEO_PLAY_STOP_OVERLAP_PX,
+  VIDEO_READY_STATE_CURRENT_DATA,
+  VIDEO_READY_STATE_FUTURE_DATA,
+  VIDEO_RESET_DISTANCE_PX,
+} from "./auto-play-video-config"
+
+export type VideoViewportState = {
+  readonly centerOffset: number
+  readonly distanceToViewport: number
+  readonly isInViewport: boolean
+  readonly isVisible: boolean
+}
+
+export type VideoPlaybackDecision = {
+  readonly shouldPause: boolean
+  readonly shouldPlay: boolean
+  readonly shouldReset: boolean
+}
+
+export function getDistanceToViewport(
+  rootTop: number,
+  rootBottom: number,
+  targetTop: number,
+  targetBottom: number
+) {
+  if (targetBottom < rootTop) {
+    return rootTop - targetBottom
+  }
+
+  if (targetTop > rootBottom) {
+    return targetTop - rootBottom
+  }
+
+  return 0
+}
+
+export function getViewportOverlapHeight(
+  rootTop: number,
+  rootBottom: number,
+  targetTop: number,
+  targetBottom: number
+) {
+  return Math.max(0, Math.min(targetBottom, rootBottom) - Math.max(targetTop, rootTop))
+}
+
+export function getViewportBounds(root: HTMLElement | null) {
+  if (!root) {
+    return { bottom: window.innerHeight, top: 0 }
+  }
+
+  const rect = root.getBoundingClientRect()
+  return { bottom: rect.bottom, top: rect.top }
+}
+
+function getViewportCenterOffset(
+  rootTop: number,
+  rootBottom: number,
+  targetTop: number,
+  targetBottom: number
+) {
+  const rootCenter = (rootTop + rootBottom) / 2
+  const targetCenter = (targetTop + targetBottom) / 2
+  return Math.abs(targetCenter - rootCenter)
+}
+
+export function deriveVideoViewportState({
+  rootBottom,
+  rootTop,
+  targetBottom,
+  targetTop,
+  wasVisible,
+}: {
+  readonly rootBottom: number
+  readonly rootTop: number
+  readonly targetBottom: number
+  readonly targetTop: number
+  readonly wasVisible: boolean
+}): VideoViewportState {
+  const overlapHeight = getViewportOverlapHeight(rootTop, rootBottom, targetTop, targetBottom)
+  const distanceToViewport = getDistanceToViewport(rootTop, rootBottom, targetTop, targetBottom)
+  const requiredOverlap = wasVisible ? VIDEO_PLAY_STOP_OVERLAP_PX : VIDEO_PLAY_START_OVERLAP_PX
+
+  return {
+    centerOffset: getViewportCenterOffset(rootTop, rootBottom, targetTop, targetBottom),
+    distanceToViewport,
+    isInViewport: overlapHeight > 0,
+    isVisible: overlapHeight >= requiredOverlap,
+  }
+}
+
+export function getVideoPlaybackDecision({
+  currentTime,
+  distanceToViewport,
+  isActive,
+  isInViewport,
+  isPlaybackOwner,
+  isPaused,
+  isVisible,
+}: {
+  readonly currentTime: number
+  readonly distanceToViewport: number
+  readonly isActive: boolean
+  readonly isInViewport: boolean
+  readonly isPlaybackOwner: boolean
+  readonly isPaused: boolean
+  readonly isVisible: boolean
+}): VideoPlaybackDecision {
+  if (!isActive) {
+    return {
+      shouldPause: true,
+      shouldPlay: false,
+      shouldReset: currentTime > 0,
+    }
+  }
+
+  if (!isInViewport) {
+    return {
+      shouldPause: true,
+      shouldPlay: false,
+      shouldReset: distanceToViewport >= VIDEO_RESET_DISTANCE_PX && currentTime > 0,
+    }
+  }
+
+  if (!isVisible) {
+    return {
+      shouldPause: true,
+      shouldPlay: false,
+      shouldReset: false,
+    }
+  }
+
+  if (!isPlaybackOwner) {
+    return {
+      shouldPause: true,
+      shouldPlay: false,
+      shouldReset: false,
+    }
+  }
+
+  return {
+    shouldPause: false,
+    shouldPlay: isPaused,
+    shouldReset: false,
+  }
+}
+
+export function shouldEnsureViewportData({
+  hasEnsuredViewportData,
+  isInViewport,
+  isPaused,
+  readyState,
+}: {
+  readonly hasEnsuredViewportData: boolean
+  readonly isInViewport: boolean
+  readonly isPaused: boolean
+  readonly readyState: number
+}) {
+  return (
+    isInViewport &&
+    !hasEnsuredViewportData &&
+    readyState < VIDEO_READY_STATE_CURRENT_DATA &&
+    isPaused
+  )
+}
+
+export function shouldForceAutoPreload({
+  canUseAutoPreload,
+  hasForcedPreload,
+  isInViewport,
+  isVisible,
+  readyState,
+}: {
+  readonly canUseAutoPreload: boolean
+  readonly hasForcedPreload: boolean
+  readonly isInViewport: boolean
+  readonly isVisible: boolean
+  readonly readyState: number
+}) {
+  return (
+    canUseAutoPreload &&
+    !hasForcedPreload &&
+    !isInViewport &&
+    !isVisible &&
+    readyState < VIDEO_READY_STATE_FUTURE_DATA
+  )
+}
+
+export function shouldEarlyLoadNearViewport({
+  distanceToViewport,
+  hasLoadedFrame,
+  isActive,
+  readyState,
+}: {
+  readonly distanceToViewport: number
+  readonly hasLoadedFrame: boolean
+  readonly isActive: boolean
+  readonly readyState: number
+}) {
+  return (
+    isActive &&
+    !hasLoadedFrame &&
+    Number.isFinite(distanceToViewport) &&
+    distanceToViewport <= VIDEO_EARLY_LOAD_DISTANCE_PX &&
+    readyState < VIDEO_READY_STATE_CURRENT_DATA
+  )
+}
+
+export function buildVideoAspectRatio({
+  videoHeight,
+  videoWidth,
+}: {
+  readonly videoHeight: number
+  readonly videoWidth: number
+}) {
+  if (videoWidth <= 0 || videoHeight <= 0) {
+    return null
+  }
+
+  return `${videoWidth} / ${videoHeight}`
+}

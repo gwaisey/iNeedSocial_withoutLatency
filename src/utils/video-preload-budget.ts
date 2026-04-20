@@ -5,7 +5,7 @@ type VideoPreloadCandidate = {
 }
 
 const MAX_AUTO_PRELOAD_VIDEOS = 2
-const MAX_AUTO_PRELOAD_DISTANCE_PX = 900
+const MAX_AUTO_PRELOAD_DISTANCE_PX = 1200
 const registry = new Map<string, VideoPreloadCandidate>()
 
 function recomputeBudget() {

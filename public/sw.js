@@ -1,4 +1,4 @@
-const CACHE_NAME = "ineedsocial-social-v2";
+const CACHE_NAME = "ineedsocial-social-v3";
 const STATIC_ASSETS = [
   "/",
   "/manifest.json",
@@ -39,6 +39,14 @@ self.addEventListener("fetch", (event) => {
 
   // Skip non-GET and cross-origin requests
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
+
+  // Avoid caching video / range requests. Cache API does not handle media range
+  // requests reliably, which can break playback after a refresh once the SW
+  // starts controlling the page.
+  if (request.destination === "video" || request.headers.has("range")) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Cache-first for static images
   if (url.pathname.startsWith("/figma/") || url.pathname.startsWith("/icons/")) {

@@ -1,4 +1,4 @@
-import { type RefObject } from "react"
+import { type RefObject, type SyntheticEvent } from "react"
 import { type Post } from "../types/social"
 import { useFeedCarousel } from "../hooks/use-feed-carousel"
 import { AutoPlayVideo } from "./auto-play-video"
@@ -25,6 +25,75 @@ type FeedPostMediaProps = {
   readonly scrollRootRef?: RefObject<HTMLElement | null>
 }
 
+type FeedMediaItem = Post["media"][number]
+
+function FeedVideoSurface({
+  canPrewarm,
+  className,
+  isActive,
+  isMuted,
+  media,
+  onLoadedMetadata,
+  scrollRootRef,
+  shellClassName,
+  tokens,
+}: {
+  readonly canPrewarm?: boolean
+  readonly className: string
+  readonly isActive?: boolean
+  readonly isMuted: boolean
+  readonly media: FeedMediaItem | undefined
+  readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
+  readonly scrollRootRef?: RefObject<HTMLElement | null>
+  readonly shellClassName?: string
+  readonly tokens: MediaSurfaceTokens
+}) {
+  return (
+    <AutoPlayVideo
+      canPrewarm={canPrewarm}
+      className={className}
+      isActive={isActive}
+      isMuted={isMuted}
+      onLoadedMetadata={onLoadedMetadata}
+      placeholderClassName={tokens.placeholder}
+      poster={media?.poster}
+      scrollRootRef={scrollRootRef}
+      shellClassName={shellClassName}
+      skeletonClassName={tokens.skeletonTone}
+      src={media?.src}
+    />
+  )
+}
+
+function FeedImageSurface({
+  className,
+  media,
+  onLoad,
+  priority = "high",
+  shellClassName,
+  tokens,
+}: {
+  readonly className: string
+  readonly media: FeedMediaItem | undefined
+  readonly onLoad?: (image: HTMLImageElement) => void
+  readonly priority?: "high" | "low"
+  readonly shellClassName?: string
+  readonly tokens: MediaSurfaceTokens
+}) {
+  return (
+    <ProgressiveImage
+      alt={media?.alt ?? ""}
+      className={className}
+      onLoad={onLoad}
+      placeholderClassName={tokens.placeholder}
+      priority={priority}
+      shellClassName={shellClassName}
+      skeletonClassName={tokens.skeletonTone}
+      src={media?.src}
+    />
+  )
+}
+
 function FeedPostVideoMedia({
   isMuted,
   onToggleMute,
@@ -42,15 +111,13 @@ function FeedPostVideoMedia({
 
   return (
     <div className={`w-full overflow-hidden relative ${tokens.surface}`}>
-      <AutoPlayVideo
+      <FeedVideoSurface
         className="w-full h-auto"
         isMuted={isMuted}
-        placeholderClassName={tokens.placeholder}
-        poster={primaryMedia?.poster}
+        media={primaryMedia}
         scrollRootRef={scrollRootRef}
         shellClassName="w-full"
-        skeletonClassName={tokens.skeletonTone}
-        src={primaryMedia?.src}
+        tokens={tokens}
       />
       <MediaMuteButton isMuted={isMuted} onClick={onToggleMute} postId={post.id} />
     </div>
@@ -98,35 +165,31 @@ function FeedPostCarouselMedia({
       >
         {media.map((item, index) =>
           isVideoSource(item.src) ? (
-            <AutoPlayVideo
+            <FeedVideoSurface
               key={item.src}
               canPrewarm={Math.abs(index - activeIdx) <= 1}
               className="w-full h-auto shrink-0"
               isActive={index === activeIdx}
               isMuted={isMuted}
+              media={item}
               onLoadedMetadata={(event) => {
                 updateSlideHeight(index, buildVideoAspectRatioHeight(event.currentTarget))
               }}
-              placeholderClassName={tokens.placeholder}
-              poster={item.poster}
               scrollRootRef={scrollRootRef}
               shellClassName="w-full shrink-0"
-              skeletonClassName={tokens.skeletonTone}
-              src={item.src}
+              tokens={tokens}
             />
           ) : (
-            <ProgressiveImage
+            <FeedImageSurface
               key={item.src}
-              alt={item.alt}
               className="w-full h-auto shrink-0"
+              media={item}
               onLoad={(image) => {
                 updateSlideHeight(index, buildImageAspectRatioHeight(image))
               }}
-              placeholderClassName={tokens.placeholder}
               priority={Math.abs(index - activeIdx) <= 1 ? "high" : "low"}
               shellClassName="w-full shrink-0"
-              skeletonClassName={tokens.skeletonTone}
-              src={item.src}
+              tokens={tokens}
             />
           )
         )}
@@ -166,14 +229,12 @@ function FeedPostImageMedia({
 
   return (
     <div className={`w-full overflow-hidden ${tokens.surface}`}>
-      <ProgressiveImage
-        alt={primaryMedia?.alt}
+      <FeedImageSurface
         className="w-full h-auto"
-        placeholderClassName={tokens.placeholder}
+        media={primaryMedia}
         priority="high"
         shellClassName="w-full"
-        skeletonClassName={tokens.skeletonTone}
-        src={primaryMedia?.src}
+        tokens={tokens}
       />
     </div>
   )
