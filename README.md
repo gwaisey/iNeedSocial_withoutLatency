@@ -193,11 +193,24 @@ scripts/
 
 - Saat feed dimuat, aplikasi menampilkan skeleton.
 - Jika pemuatan feed gagal, aplikasi menampilkan state retry di dalam halaman.
-- Payload feed divalidasi secara runtime sebelum dinormalisasi. Jika format feed tidak valid, UI menampilkan pesan aman yang terlokalisasi dan detail error mentah dicatat ke `console.error`.
+- Payload feed divalidasi secara runtime sebelum dinormalisasi. Jika format feed tidak valid, UI menampilkan pesan aman yang terlokalisasi dan detail error teknis dicatat melalui reporter runtime internal.
 - Waktu feed dialokasikan terus-menerus ke post dominan yang terlihat, sehingga timer utama selaras dengan total kategori.
 - Video hanya autoplay saat terlihat, dan video di carousel hanya autoplay pada slide aktif.
-- Error runtime yang aman untuk pengguna tetap ditampilkan secara lokal, sementara error mentah dicatat ke `console.error` untuk debugging.
+- Error runtime yang aman untuk pengguna tetap ditampilkan secara lokal, sementara reporter runtime internal meneruskan detail teknis ke `console.warn` / `console.error` dan event browser `ineedsocial:monitoring` untuk integrasi monitoring berikutnya.
 - Output build di `dist/`, file `.env`, log lokal Vite, `*.tsbuildinfo`, dan output config hasil generate tidak boleh dilacak di git.
 - Jika file-file terabaikan tersebut pernah ter-commit, bersihkan index git saat ini dan rewrite history repo agar artefak serta secret lama benar-benar terhapus.
 - Terapkan migrasi `supabase/migrations/202604130900_feed_sessions_session_id_unique.sql` agar tabel `feed_sessions` memiliki constraint unik pada `session_id` dan duplikasi lama dibersihkan sebelum save client insert-only dijalankan penuh.
 - Terapkan migrasi `supabase/migrations/202604200900_feed_sessions_rls.sql` setelah constraint unik sudah aktif agar akses client ke `feed_sessions` dibatasi menjadi insert-only dan pembacaan anonim tidak lagi terbuka.
+
+## Smoke Check Setelah Deploy
+
+Setelah deploy ke production:
+
+1. Buka aplikasi dan mulai satu sesi studi baru.
+2. Lewati tutorial bila muncul, lalu interaksikan feed beberapa detik.
+3. Ubah tema sekali untuk memastikan feed tetap pulih dengan benar.
+4. Buka satu post video, unmute lalu mute lagi untuk memastikan kontrol audio tetap sinkron.
+5. Akhiri sesi sampai ke halaman terima kasih.
+6. Pastikan status save menampilkan kondisi sukses atau retry yang jelas.
+7. Verifikasi satu baris baru masuk ke `feed_sessions`.
+8. Verifikasi client anonim tidak bisa melakukan `SELECT`, `UPDATE`, atau `DELETE` ke `feed_sessions` setelah migrasi RLS diterapkan.

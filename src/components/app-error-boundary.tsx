@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
+import { reportRuntimeIssue } from "../utils/runtime-monitoring"
 
 type AppErrorBoundaryProps = {
   children: ReactNode
@@ -21,7 +22,15 @@ export class AppErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("app-error-boundary", error, errorInfo)
+    reportRuntimeIssue({
+      error,
+      level: "error",
+      message: "Unhandled React render error reached the app boundary.",
+      metadata: {
+        componentStack: errorInfo.componentStack,
+      },
+      scope: "app-error-boundary",
+    })
   }
 
   private handleReload = () => {
@@ -38,7 +47,10 @@ export class AppErrorBoundary extends Component<
     }
 
     return (
-      <div className="min-h-svh flex items-center justify-center bg-app-radial p-6 text-ink">
+      <div
+        className="min-h-svh flex items-center justify-center bg-app-radial p-6 text-ink"
+        data-testid="app-error-boundary-fallback"
+      >
         <div className="w-full max-w-md rounded-3xl bg-white px-8 py-10 shadow-phone">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-haze">
             Terjadi gangguan

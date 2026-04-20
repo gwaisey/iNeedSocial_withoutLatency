@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import type { SessionReportPayload } from "../types/social"
+import { reportRuntimeIssue } from "../utils/runtime-monitoring"
 
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504])
 const SAVE_RETRY_DELAYS_MS = [150, 300] as const
@@ -135,9 +136,31 @@ export async function saveSessionDataWithClient(
 
     lastError = error
     if (!isRetryableSaveError(error) || attempt === SAVE_RETRY_DELAYS_MS.length) {
+      reportRuntimeIssue({
+        error,
+        level: "error",
+        message: "Feed session save failed.",
+        metadata: {
+          attempt: attempt + 1,
+          isRetryable: isRetryableSaveError(error),
+          sessionId: payload.session_id,
+        },
+        scope: "supabase-save",
+      })
       throw error
     }
 
+    reportRuntimeIssue({
+      error,
+      level: "warn",
+      message: "Retrying feed session save after transient failure.",
+      metadata: {
+        attempt: attempt + 1,
+        nextDelayMs: SAVE_RETRY_DELAYS_MS[attempt],
+        sessionId: payload.session_id,
+      },
+      scope: "supabase-save",
+    })
     await wait(SAVE_RETRY_DELAYS_MS[attempt])
   }
 

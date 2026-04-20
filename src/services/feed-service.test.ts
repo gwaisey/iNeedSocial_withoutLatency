@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import * as runtimeMonitoring from "../utils/runtime-monitoring"
 import {
   normalizeFeedPayload,
   resolveFeedPath,
@@ -7,10 +8,19 @@ import {
 } from "./feed-service"
 
 describe("feed-service helpers", () => {
-  const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+  const reportRuntimeIssueSpy = vi
+    .spyOn(runtimeMonitoring, "reportRuntimeIssue")
+    .mockImplementation((input) => ({
+      error: input.error instanceof Error ? { message: input.error.message } : undefined,
+      level: input.level,
+      message: input.message,
+      metadata: input.metadata,
+      scope: input.scope,
+      timestamp: "2026-04-20T00:00:00.000Z",
+    }))
 
   afterEach(() => {
-    consoleErrorSpy.mockClear()
+    reportRuntimeIssueSpy.mockClear()
   })
 
   it("defaults feed source to mock unless explicitly set to api", () => {
@@ -52,9 +62,16 @@ describe("feed-service helpers", () => {
     expect(() => validateFeedPayload({ posts: [{ id: "post-1" }] })).toThrow(
       "Format feed tidak valid."
     )
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "[feed-service:validation]",
-      expect.anything()
+    expect(reportRuntimeIssueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.anything(),
+        level: "error",
+        message: "Feed payload validation failed.",
+        metadata: {
+          issueCount: expect.any(Number),
+        },
+        scope: "feed-service",
+      })
     )
   })
 })

@@ -6,6 +6,7 @@ import {
   type Post,
   type ThemeMode,
 } from "../types/social"
+import { reportRuntimeIssue } from "../utils/runtime-monitoring"
 
 const VALID_GENRES = new Set<GenreKey>(GENRE_KEYS)
 
@@ -76,7 +77,15 @@ export function validateFeedPayload(payload: unknown): RawFeedPayload {
     return result.data
   }
 
-  console.error("[feed-service:validation]", result.error)
+  reportRuntimeIssue({
+    error: result.error,
+    level: "error",
+    message: "Feed payload validation failed.",
+    metadata: {
+      issueCount: result.error.issues.length,
+    },
+    scope: "feed-service",
+  })
   throw new Error("Format feed tidak valid.")
 }
 
