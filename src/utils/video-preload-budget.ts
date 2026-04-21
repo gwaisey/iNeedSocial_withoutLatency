@@ -4,8 +4,8 @@ type VideoPreloadCandidate = {
   notify: (canUseAutoPreload: boolean) => void
 }
 
-const MAX_AUTO_PRELOAD_VIDEOS = 2
-const MAX_AUTO_PRELOAD_DISTANCE_PX = 1200
+const MAX_AUTO_PRELOAD_VIDEOS = 4
+const MAX_AUTO_PRELOAD_DISTANCE_PX = 2200
 const registry = new Map<string, VideoPreloadCandidate>()
 
 function recomputeBudget() {

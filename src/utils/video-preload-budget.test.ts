@@ -21,6 +21,8 @@ describe("video preload budget", () => {
     connectCandidate("video-a")
     connectCandidate("video-b")
     connectCandidate("video-c")
+    connectCandidate("video-d")
+    connectCandidate("video-e")
 
     updateVideoPreloadCandidate("video-a", {
       canPrewarm: true,
@@ -34,15 +36,27 @@ describe("video preload budget", () => {
       canPrewarm: true,
       distancePx: 640,
     })
+    updateVideoPreloadCandidate("video-d", {
+      canPrewarm: true,
+      distancePx: 960,
+    })
+    updateVideoPreloadCandidate("video-e", {
+      canPrewarm: true,
+      distancePx: 1_280,
+    })
 
     expect(notifications.get("video-a")).toBe(true)
     expect(notifications.get("video-b")).toBe(true)
-    expect(notifications.get("video-c")).toBe(false)
+    expect(notifications.get("video-c")).toBe(true)
+    expect(notifications.get("video-d")).toBe(true)
+    expect(notifications.get("video-e")).toBe(false)
 
     unregisterVideoPreloadCandidate("video-a")
 
     expect(notifications.get("video-b")).toBe(true)
     expect(notifications.get("video-c")).toBe(true)
+    expect(notifications.get("video-d")).toBe(true)
+    expect(notifications.get("video-e")).toBe(true)
   })
 
   it("excludes faraway or disabled candidates from the auto preload pool", () => {
@@ -60,7 +74,7 @@ describe("video preload budget", () => {
     })
     updateVideoPreloadCandidate("far", {
       canPrewarm: true,
-      distancePx: 1_400,
+      distancePx: 2_400,
     })
 
     expect(notifyNear).toHaveBeenLastCalledWith(true)
