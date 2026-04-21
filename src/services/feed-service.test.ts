@@ -147,4 +147,22 @@ describe("feed-service helpers", () => {
       })
     ).toThrow("Format feed tidak valid.")
   })
+
+  it("rejects media items with empty alt text", () => {
+    expect(() =>
+      validateFeedPayload({
+        posts: [
+          {
+            id: "post-image-empty-alt",
+            type: "image",
+            username: "uji",
+            likes: "10",
+            caption: "uji",
+            media: [{ src: "/content/files/sample.jpg", alt: "   " }],
+            genre: "humor",
+          },
+        ],
+      })
+    ).toThrow("Format feed tidak valid.")
+  })
 })

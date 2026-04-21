@@ -53,7 +53,7 @@ function validatePostMediaShape(post: RawPost, context: z.RefinementCtx) {
 const rawMediaSchema = z
   .object({
     src: z.string().min(1),
-    alt: z.string(),
+    alt: z.string().trim().min(1),
     poster: z.string().optional(),
   })
   .strict()
