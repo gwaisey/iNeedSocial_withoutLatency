@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
+import type { VideoPreloadDirection } from "../utils/video-preload-budget"
 import { VIDEO_EARLY_LOAD_DISTANCE_PX } from "./auto-play-video-config"
 import { deriveVideoViewportState, getViewportBounds } from "./auto-play-video-state"
 
@@ -9,6 +10,7 @@ type VideoViewportState = {
   readonly isInViewport: boolean
   readonly isVisible: boolean
   readonly playbackPriority: number
+  readonly preloadDirection: VideoPreloadDirection
 }
 
 const INITIAL_VIDEO_VIEWPORT_STATE: VideoViewportState = {
@@ -16,6 +18,24 @@ const INITIAL_VIDEO_VIEWPORT_STATE: VideoViewportState = {
   isInViewport: false,
   isVisible: false,
   playbackPriority: Number.POSITIVE_INFINITY,
+  preloadDirection: "below",
+}
+
+function getViewportPreloadDirection(
+  rootTop: number,
+  rootBottom: number,
+  targetTop: number,
+  targetBottom: number
+): VideoPreloadDirection {
+  if (targetBottom <= rootTop) {
+    return "above"
+  }
+
+  if (targetTop >= rootBottom) {
+    return "below"
+  }
+
+  return "visible"
 }
 
 const viewportSubscribers = new Set<ViewportSubscriber>()
@@ -112,6 +132,12 @@ export function useMountedVideoViewportState({
         isInViewport: nextViewportState.isInViewport,
         isVisible: nextViewportState.isVisible,
         playbackPriority: nextViewportState.centerOffset,
+        preloadDirection: getViewportPreloadDirection(
+          rootTop,
+          rootBottom,
+          shellRect.top,
+          shellRect.bottom
+        ),
       })
     }
 

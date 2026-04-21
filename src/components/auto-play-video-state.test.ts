@@ -3,6 +3,7 @@ import {
   buildVideoAspectRatio,
   deriveVideoViewportState,
   getVideoPlaybackDecision,
+  shouldAttachVideoSource,
   shouldEarlyLoadNearViewport,
   shouldEnsureViewportData,
   shouldForceAutoPreload,
@@ -191,6 +192,46 @@ describe("auto-play video state", () => {
         readyState: 0,
       })
     ).toBe(false)
+
+    expect(
+      shouldAttachVideoSource({
+        canUseAutoPreload: false,
+        hasAttachedSource: false,
+        isInViewport: false,
+        isNearViewport: false,
+        isVisible: false,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldAttachVideoSource({
+        canUseAutoPreload: true,
+        hasAttachedSource: false,
+        isInViewport: false,
+        isNearViewport: false,
+        isVisible: false,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldAttachVideoSource({
+        canUseAutoPreload: false,
+        hasAttachedSource: false,
+        isInViewport: false,
+        isNearViewport: true,
+        isVisible: false,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldAttachVideoSource({
+        canUseAutoPreload: false,
+        hasAttachedSource: true,
+        isInViewport: false,
+        isNearViewport: false,
+        isVisible: false,
+      })
+    ).toBe(true)
 
     expect(
       shouldEarlyLoadNearViewport({

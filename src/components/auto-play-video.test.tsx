@@ -108,6 +108,38 @@ describe("AutoPlayVideo", () => {
     expect(container.querySelector("video")).toBeNull()
   })
 
+  it("mounts the shell without attaching a real src while the video stays offscreen and out of the preload pool", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 5_600,
+      height: 600,
+      left: 0,
+      right: 360,
+      toJSON: () => ({}),
+      top: 5_000,
+      width: 360,
+      x: 0,
+      y: 5_000,
+    } as DOMRect)
+
+    const { container } = render(
+      <AutoPlayVideo
+        canPrewarm={true}
+        className="video"
+        isMuted={true}
+        poster="/poster.jpg"
+        src="/content/videos/pinata.mp4"
+      />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector("video")).not.toBeNull()
+    })
+
+    const video = container.querySelector("video")
+    expect(video?.getAttribute("src")).toBeNull()
+    expect(video).toHaveAttribute("preload", "none")
+  })
+
   it("waits for requestVideoFrameCallback before revealing the video when available", async () => {
     let queuedAnimationFrame: FrameRequestCallback | null = null
     let frameCallback: (() => void) | null = null

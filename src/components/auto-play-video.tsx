@@ -14,6 +14,7 @@ import {
 import { syncVideoMutedState, useVideoReadinessState } from "./auto-play-video-readiness"
 import {
   getVideoPlaybackDecision,
+  shouldAttachVideoSource,
   shouldEarlyLoadNearViewport,
   shouldEnsureViewportData,
   shouldForceAutoPreload,
@@ -57,6 +58,7 @@ export function AutoPlayVideo({
   const hasForcedPreloadRef = useRef(false)
   const hasEnsuredViewportDataRef = useRef(false)
   const [canUseAutoPreload, setCanUseAutoPreload] = useState(false)
+  const [hasAttachedSource, setHasAttachedSource] = useState(false)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
   const [shouldMountVideo, setShouldMountVideo] = useState(false)
   const {
@@ -65,6 +67,7 @@ export function AutoPlayVideo({
     isNearViewport,
     isVisible,
     playbackPriority,
+    preloadDirection,
   } = useMountedVideoViewportState({
     hasVideoSource,
     scrollRootRef,
@@ -95,6 +98,7 @@ export function AutoPlayVideo({
     isVisible,
     playbackCandidateId,
     playbackPriority,
+    preloadDirection,
     preloadCandidateId,
     setCanUseAutoPreload,
     setIsPlaybackOwner,
@@ -109,11 +113,31 @@ export function AutoPlayVideo({
   useVideoSourceLifecycleReset({
     normalizedSrc,
     setCanUseAutoPreload,
+    setHasAttachedSource,
     setIsPlaybackOwner,
     setShouldMountVideo,
     shouldResetViewportDataRef: hasEnsuredViewportDataRef,
     shouldResetWarmupRef: hasForcedPreloadRef,
   })
+
+  const shouldRenderVideoSource =
+    hasVideoSource &&
+    shouldMountVideo &&
+    shouldAttachVideoSource({
+      canUseAutoPreload,
+      hasAttachedSource,
+      isInViewport,
+      isNearViewport,
+      isVisible,
+    })
+
+  useEffect(() => {
+    if (!shouldRenderVideoSource || hasAttachedSource) {
+      return
+    }
+
+    setHasAttachedSource(true)
+  }, [hasAttachedSource, shouldRenderVideoSource])
 
   useEffect(() => {
     const video = videoRef.current
@@ -126,7 +150,7 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !hasVideoSource || !shouldMountVideo) {
+    if (!video || !shouldRenderVideoSource) {
       return
     }
 
@@ -199,12 +223,12 @@ export function AutoPlayVideo({
     isVisible,
     lastReportedLoadIssueRef,
     normalizedSrc,
-    shouldMountVideo,
+    shouldRenderVideoSource,
   ])
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !hasVideoSource) {
+    if (!video || !shouldRenderVideoSource) {
       return
     }
 
@@ -283,6 +307,7 @@ export function AutoPlayVideo({
     lastReportedPlayIssueRef,
     normalizedSrc,
     queueFrameReady,
+    shouldRenderVideoSource,
   ])
 
   return (
@@ -300,7 +325,7 @@ export function AutoPlayVideo({
         <img
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
           decoding="async"
           src={resolvedPoster}
         />
@@ -315,8 +340,14 @@ export function AutoPlayVideo({
           onLoadedMetadata={handleLoadedMetadata}
           playsInline
           poster={resolvedPoster}
-          preload={canUseAutoPreload || isInViewport || isNearViewport || isVisible ? "auto" : "metadata"}
-          src={normalizedSrc}
+          preload={
+            shouldRenderVideoSource
+              ? canUseAutoPreload || isInViewport || isNearViewport || isVisible
+                ? "auto"
+                : "metadata"
+              : "none"
+          }
+          src={shouldRenderVideoSource ? normalizedSrc : undefined}
         />
       )}
     </div>

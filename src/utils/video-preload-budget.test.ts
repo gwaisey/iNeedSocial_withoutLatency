@@ -7,7 +7,7 @@ import {
 } from "./video-preload-budget"
 
 describe("video preload budget", () => {
-  it("grants auto preload only to the closest eligible videos", () => {
+  it("prefers visible and below-viewport videos before above-viewport videos", () => {
     resetVideoPreloadBudgetForTests()
 
     const notifications = new Map<string, boolean>()
@@ -27,29 +27,34 @@ describe("video preload budget", () => {
     updateVideoPreloadCandidate("video-a", {
       canPrewarm: true,
       distancePx: 0,
+      direction: "visible",
     })
     updateVideoPreloadCandidate("video-b", {
       canPrewarm: true,
       distancePx: 320,
+      direction: "below",
     })
     updateVideoPreloadCandidate("video-c", {
       canPrewarm: true,
-      distancePx: 640,
+      distancePx: 24,
+      direction: "above",
     })
     updateVideoPreloadCandidate("video-d", {
       canPrewarm: true,
       distancePx: 960,
+      direction: "below",
     })
     updateVideoPreloadCandidate("video-e", {
       canPrewarm: true,
       distancePx: 1_280,
+      direction: "below",
     })
 
     expect(notifications.get("video-a")).toBe(true)
     expect(notifications.get("video-b")).toBe(true)
-    expect(notifications.get("video-c")).toBe(true)
+    expect(notifications.get("video-c")).toBe(false)
     expect(notifications.get("video-d")).toBe(true)
-    expect(notifications.get("video-e")).toBe(false)
+    expect(notifications.get("video-e")).toBe(true)
 
     unregisterVideoPreloadCandidate("video-a")
 
@@ -71,10 +76,12 @@ describe("video preload budget", () => {
     updateVideoPreloadCandidate("near", {
       canPrewarm: true,
       distancePx: 200,
+      direction: "below",
     })
     updateVideoPreloadCandidate("far", {
       canPrewarm: true,
       distancePx: 2_400,
+      direction: "below",
     })
 
     expect(notifyNear).toHaveBeenLastCalledWith(true)
@@ -83,6 +90,7 @@ describe("video preload budget", () => {
     updateVideoPreloadCandidate("near", {
       canPrewarm: false,
       distancePx: 0,
+      direction: "below",
     })
 
     expect(notifyNear).toHaveBeenLastCalledWith(false)

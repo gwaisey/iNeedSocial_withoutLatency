@@ -1,12 +1,27 @@
+export type VideoPreloadDirection = "above" | "below" | "visible"
+
 type VideoPreloadCandidate = {
   canPrewarm: boolean
   distancePx: number
+  direction: VideoPreloadDirection
   notify: (canUseAutoPreload: boolean) => void
 }
 
 const MAX_AUTO_PRELOAD_VIDEOS = 4
 const MAX_AUTO_PRELOAD_DISTANCE_PX = 2200
 const registry = new Map<string, VideoPreloadCandidate>()
+
+function getPreloadDirectionPriority(direction: VideoPreloadDirection) {
+  switch (direction) {
+    case "visible":
+      return 0
+    case "below":
+      return 1
+    case "above":
+    default:
+      return 2
+  }
+}
 
 function recomputeBudget() {
   const eligibleCandidates = [...registry.entries()]
@@ -17,7 +32,16 @@ function recomputeBudget() {
         candidate.distancePx <= MAX_AUTO_PRELOAD_DISTANCE_PX
       )
     })
-    .sort((left, right) => left[1].distancePx - right[1].distancePx)
+    .sort((left, right) => {
+      const directionPriorityDifference =
+        getPreloadDirectionPriority(left[1].direction) - getPreloadDirectionPriority(right[1].direction)
+
+      if (directionPriorityDifference !== 0) {
+        return directionPriorityDifference
+      }
+
+      return left[1].distancePx - right[1].distancePx
+    })
 
   const autoPreloadIds = new Set(
     eligibleCandidates
@@ -37,6 +61,7 @@ export function registerVideoPreloadCandidate(
   registry.set(candidateId, {
     canPrewarm: false,
     distancePx: Number.POSITIVE_INFINITY,
+    direction: "below",
     notify,
   })
   recomputeBudget()
@@ -55,9 +80,11 @@ export function updateVideoPreloadCandidate(
   {
     canPrewarm,
     distancePx,
+    direction,
   }: {
     canPrewarm: boolean
     distancePx: number
+    direction: VideoPreloadDirection
   }
 ) {
   const candidate = registry.get(candidateId)
@@ -67,6 +94,7 @@ export function updateVideoPreloadCandidate(
 
   candidate.canPrewarm = canPrewarm
   candidate.distancePx = canPrewarm ? distancePx : Number.POSITIVE_INFINITY
+  candidate.direction = direction
   recomputeBudget()
 }
 

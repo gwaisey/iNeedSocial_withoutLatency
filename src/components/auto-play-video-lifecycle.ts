@@ -9,6 +9,7 @@ import {
 import { reportRuntimeIssue } from "../utils/runtime-monitoring"
 import {
   registerVideoPreloadCandidate,
+  type VideoPreloadDirection,
   unregisterVideoPreloadCandidate,
   updateVideoPreloadCandidate,
 } from "../utils/video-preload-budget"
@@ -136,6 +137,7 @@ export function useVideoCandidateLifecycle({
   isVisible,
   playbackCandidateId,
   playbackPriority,
+  preloadDirection,
   preloadCandidateId,
   setCanUseAutoPreload,
   setIsPlaybackOwner,
@@ -148,6 +150,7 @@ export function useVideoCandidateLifecycle({
   readonly isVisible: boolean
   readonly playbackCandidateId: string
   readonly playbackPriority: number
+  readonly preloadDirection: VideoPreloadDirection
   readonly preloadCandidateId: string
   readonly setCanUseAutoPreload: Dispatch<SetStateAction<boolean>>
   readonly setIsPlaybackOwner: Dispatch<SetStateAction<boolean>>
@@ -185,8 +188,16 @@ export function useVideoCandidateLifecycle({
     updateVideoPreloadCandidate(preloadCandidateId, {
       canPrewarm: canPrewarm && shouldMountVideo,
       distancePx: distanceToViewport,
+      direction: preloadDirection,
     })
-  }, [canPrewarm, distanceToViewport, hasVideoSource, preloadCandidateId, shouldMountVideo])
+  }, [
+    canPrewarm,
+    distanceToViewport,
+    hasVideoSource,
+    preloadCandidateId,
+    preloadDirection,
+    shouldMountVideo,
+  ])
 
   useEffect(() => {
     if (!hasVideoSource) {
@@ -250,6 +261,7 @@ export function useVideoPrewarmMount({
 export function useVideoSourceLifecycleReset({
   normalizedSrc,
   setCanUseAutoPreload,
+  setHasAttachedSource,
   setIsPlaybackOwner,
   setShouldMountVideo,
   shouldResetViewportDataRef,
@@ -257,6 +269,7 @@ export function useVideoSourceLifecycleReset({
 }: {
   readonly normalizedSrc?: string
   readonly setCanUseAutoPreload: Dispatch<SetStateAction<boolean>>
+  readonly setHasAttachedSource: Dispatch<SetStateAction<boolean>>
   readonly setIsPlaybackOwner: Dispatch<SetStateAction<boolean>>
   readonly setShouldMountVideo: Dispatch<SetStateAction<boolean>>
   readonly shouldResetViewportDataRef: MutableRefObject<boolean>
@@ -271,6 +284,7 @@ export function useVideoSourceLifecycleReset({
 
     previousSourceRef.current = normalizedSrc
     setCanUseAutoPreload(false)
+    setHasAttachedSource(false)
     setIsPlaybackOwner(false)
     setShouldMountVideo(false)
     shouldResetWarmupRef.current = false
@@ -278,6 +292,7 @@ export function useVideoSourceLifecycleReset({
   }, [
     normalizedSrc,
     setCanUseAutoPreload,
+    setHasAttachedSource,
     setIsPlaybackOwner,
     setShouldMountVideo,
     shouldResetViewportDataRef,

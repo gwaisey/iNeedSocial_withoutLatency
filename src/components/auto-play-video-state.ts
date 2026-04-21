@@ -188,6 +188,22 @@ export function shouldForceAutoPreload({
   )
 }
 
+export function shouldAttachVideoSource({
+  canUseAutoPreload,
+  hasAttachedSource,
+  isInViewport,
+  isNearViewport,
+  isVisible,
+}: {
+  readonly canUseAutoPreload: boolean
+  readonly hasAttachedSource: boolean
+  readonly isInViewport: boolean
+  readonly isNearViewport: boolean
+  readonly isVisible: boolean
+}) {
+  return hasAttachedSource || canUseAutoPreload || isNearViewport || isInViewport || isVisible
+}
+
 export function shouldEarlyLoadNearViewport({
   distanceToViewport,
   hasLoadedFrame,
