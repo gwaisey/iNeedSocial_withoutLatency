@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getVideoPosterSource } from "./auto-play-video-config"
+import { getKnownVideoAspectRatio, getVideoPosterSource } from "./auto-play-video-config"
 
 describe("auto-play video config", () => {
   it("prefers explicit posters but can derive a static poster path from a video source", () => {
@@ -12,5 +12,11 @@ describe("auto-play video config", () => {
     )
 
     expect(getVideoPosterSource("/content/files/photo.jpg")).toBeUndefined()
+  })
+
+  it("derives a stable aspect ratio from known poster dimensions", () => {
+    expect(getKnownVideoAspectRatio("/content/videos/captain-america.mp4")).toBe("540 / 300")
+    expect(getKnownVideoAspectRatio("/content/videos/pinata.mp4")).toBe("480 / 854")
+    expect(getKnownVideoAspectRatio("/content/files/photo.jpg")).toBeUndefined()
   })
 })

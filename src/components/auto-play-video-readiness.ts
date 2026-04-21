@@ -99,12 +99,14 @@ export function useVideoReadinessState({
   hasVideoSource,
   normalizedSrc,
   onLoadedMetadata,
+  posterSrc,
   shouldMountVideo,
   videoRef,
 }: {
   readonly hasVideoSource: boolean
   readonly normalizedSrc?: string
   readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
+  readonly posterSrc?: string
   readonly shouldMountVideo: boolean
   readonly videoRef: RefObject<HTMLVideoElement | null>
 }) {
@@ -114,7 +116,7 @@ export function useVideoReadinessState({
   const lastReportedPlayIssueRef = useRef<string | null>(null)
   const [hasLoadedFrame, setHasLoadedFrame] = useState(false)
   const [shellAspectRatio, setShellAspectRatio] = useState(
-    () => getKnownVideoAspectRatio(normalizedSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO
+    () => getKnownVideoAspectRatio(normalizedSrc, posterSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO
   )
 
   useEffect(() => {
@@ -128,8 +130,10 @@ export function useVideoReadinessState({
     setHasLoadedFrame(false)
     lastReportedLoadIssueRef.current = null
     lastReportedPlayIssueRef.current = null
-    setShellAspectRatio(getKnownVideoAspectRatio(normalizedSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO)
-  }, [normalizedSrc])
+    setShellAspectRatio(
+      getKnownVideoAspectRatio(normalizedSrc, posterSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO
+    )
+  }, [normalizedSrc, posterSrc])
 
   useEffect(() => {
     const video = videoRef.current
@@ -171,7 +175,7 @@ export function useVideoReadinessState({
       videoWidth: event.currentTarget.videoWidth,
     })
 
-    if (nextAspectRatio) {
+    if (nextAspectRatio && !getKnownVideoAspectRatio(normalizedSrc, posterSrc)) {
       rememberVideoAspectRatio(normalizedSrc, nextAspectRatio)
       setShellAspectRatio(nextAspectRatio)
     }
@@ -179,9 +183,20 @@ export function useVideoReadinessState({
     onLoadedMetadata?.(event)
   }
 
+  const handlePosterLoad = (image: HTMLImageElement) => {
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      return
+    }
+
+    const nextAspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`
+    rememberVideoAspectRatio(normalizedSrc, nextAspectRatio)
+    setShellAspectRatio(nextAspectRatio)
+  }
+
   return {
     handleLoadedData,
     handleLoadedMetadata,
+    handlePosterLoad,
     hasLoadedFrame,
     lastReportedLoadIssueRef,
     lastReportedPlayIssueRef,

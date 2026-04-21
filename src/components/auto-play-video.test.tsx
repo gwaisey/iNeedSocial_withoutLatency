@@ -208,9 +208,9 @@ describe("AutoPlayVideo", () => {
     })
   })
 
-  it("updates the shell ratio based on video metadata", async () => {
+  it("uses the poster-derived ratio immediately and keeps it stable after metadata loads", async () => {
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/captain-america.mp4" />
     )
 
     await waitFor(() => {
@@ -219,6 +219,8 @@ describe("AutoPlayVideo", () => {
 
     const video = container.querySelector("video") as HTMLVideoElement
     const shell = video.parentElement as HTMLDivElement
+
+    expect(shell.style.aspectRatio).toBe("540 / 300")
 
     Object.defineProperty(video, "videoWidth", {
       configurable: true,
@@ -231,6 +233,6 @@ describe("AutoPlayVideo", () => {
 
     fireEvent.loadedMetadata(video)
 
-    expect(shell.style.aspectRatio).toBe("432 / 768")
+    expect(shell.style.aspectRatio).toBe("540 / 300")
   })
 })

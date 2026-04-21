@@ -24,6 +24,7 @@ type AutoPlayVideoProps = {
   readonly isActive?: boolean
   readonly isMuted: boolean
   readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
+  readonly onPosterLoad?: (image: HTMLImageElement) => void
   readonly placeholderClassName?: string
   readonly poster?: string
   readonly shellClassName?: string
@@ -38,6 +39,7 @@ export function AutoPlayVideo({
   isActive = true,
   isMuted,
   onLoadedMetadata,
+  onPosterLoad,
   placeholderClassName = "bg-ink/8",
   poster,
   shellClassName = "",
@@ -74,6 +76,7 @@ export function AutoPlayVideo({
   const {
     handleLoadedData,
     handleLoadedMetadata,
+    handlePosterLoad,
     hasLoadedFrame,
     lastReportedPlayIssueRef,
     queueFrameReady,
@@ -82,6 +85,7 @@ export function AutoPlayVideo({
     hasVideoSource,
     normalizedSrc,
     onLoadedMetadata,
+    posterSrc: resolvedPoster,
     shouldMountVideo,
     videoRef,
   })
@@ -305,6 +309,10 @@ export function AutoPlayVideo({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 h-full w-full object-cover"
           decoding="async"
+          onLoad={(event) => {
+            handlePosterLoad(event.currentTarget)
+            onPosterLoad?.(event.currentTarget)
+          }}
           src={resolvedPoster}
         />
       )}

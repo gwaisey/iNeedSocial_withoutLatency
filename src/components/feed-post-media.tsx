@@ -1,4 +1,4 @@
-import { type RefObject, type SyntheticEvent } from "react"
+import { useLayoutEffect, useRef, type RefObject, type SyntheticEvent } from "react"
 import { type Post } from "../types/social"
 import { useFeedCarousel } from "../hooks/use-feed-carousel"
 import { AutoPlayVideo } from "./auto-play-video"
@@ -10,6 +10,7 @@ import {
 } from "./feed-post-carousel-controls"
 import { ProgressiveImage } from "./progressive-image"
 import {
+  buildKnownVideoAspectRatioHeight,
   buildVideoAspectRatioHeight,
   buildImageAspectRatioHeight,
   getMediaSurfaceTokens,
@@ -34,6 +35,7 @@ function FeedVideoSurface({
   isMuted,
   media,
   onLoadedMetadata,
+  onPosterLoad,
   scrollRootRef,
   shellClassName,
   tokens,
@@ -44,6 +46,7 @@ function FeedVideoSurface({
   readonly isMuted: boolean
   readonly media: FeedMediaItem | undefined
   readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
+  readonly onPosterLoad?: (image: HTMLImageElement) => void
   readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly shellClassName?: string
   readonly tokens: MediaSurfaceTokens
@@ -55,6 +58,7 @@ function FeedVideoSurface({
       isActive={isActive}
       isMuted={isMuted}
       onLoadedMetadata={onLoadedMetadata}
+      onPosterLoad={onPosterLoad}
       placeholderClassName={tokens.placeholder}
       poster={media?.poster}
       scrollRootRef={scrollRootRef}
@@ -148,9 +152,53 @@ function FeedPostCarouselMedia({
     prevSlide,
     updateSlideHeight,
   } = useFeedCarousel({ mediaLength: media.length })
+  const carouselRef = useRef<HTMLDivElement | null>(null)
+
+  useLayoutEffect(() => {
+    const carousel = carouselRef.current
+    if (!carousel) {
+      return
+    }
+
+    const syncKnownVideoHeights = () => {
+      const width = carousel.clientWidth
+      if (width <= 0) {
+        return
+      }
+
+      media.forEach((item, index) => {
+        const knownHeight = buildKnownVideoAspectRatioHeight({
+          poster: item.poster,
+          src: item.src,
+          width,
+        })
+
+        if (knownHeight !== null) {
+          updateSlideHeight(index, knownHeight)
+        }
+      })
+    }
+
+    syncKnownVideoHeights()
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", syncKnownVideoHeights)
+      return () => {
+        window.removeEventListener("resize", syncKnownVideoHeights)
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(syncKnownVideoHeights)
+    resizeObserver.observe(carousel)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [media, updateSlideHeight])
 
   return (
     <div
+      ref={carouselRef}
       className={`w-full overflow-hidden relative transition-[height] duration-300 ${tokens.surface}`}
       onTouchEnd={handleTouchEnd}
       onTouchStart={handleTouchStart}
@@ -174,6 +222,9 @@ function FeedPostCarouselMedia({
               media={item}
               onLoadedMetadata={(event) => {
                 updateSlideHeight(index, buildVideoAspectRatioHeight(event.currentTarget))
+              }}
+              onPosterLoad={(image) => {
+                updateSlideHeight(index, buildImageAspectRatioHeight(image))
               }}
               scrollRootRef={scrollRootRef}
               shellClassName="w-full shrink-0"

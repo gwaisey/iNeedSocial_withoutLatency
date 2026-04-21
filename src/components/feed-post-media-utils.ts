@@ -1,3 +1,5 @@
+import { getKnownVideoPosterDimensions } from "./auto-play-video-config"
+
 export type MediaSurfaceTokens = {
   placeholder: string
   skeletonTone: string
@@ -22,6 +24,27 @@ export function buildVideoAspectRatioHeight(video: HTMLVideoElement) {
   }
 
   return (video.clientWidth * video.videoHeight) / video.videoWidth
+}
+
+export function buildKnownVideoAspectRatioHeight({
+  poster,
+  src,
+  width,
+}: {
+  readonly poster?: string
+  readonly src?: string
+  readonly width: number
+}) {
+  if (width <= 0) {
+    return null
+  }
+
+  const dimensions = getKnownVideoPosterDimensions(src, poster)
+  if (!dimensions) {
+    return null
+  }
+
+  return (width * dimensions.height) / dimensions.width
 }
 
 export function buildImageAspectRatioHeight(image: HTMLImageElement) {
