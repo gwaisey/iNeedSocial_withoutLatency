@@ -5,7 +5,6 @@ import {
 } from "./auto-play-video-config"
 import {
   classifyVideoPlayError,
-  reportVideoLoadIssue,
   reportVideoPlayIssue,
   useVideoCandidateLifecycle,
   useVideoPrewarmMount,
@@ -15,9 +14,6 @@ import { syncVideoMutedState, useVideoReadinessState } from "./auto-play-video-r
 import {
   getVideoPlaybackDecision,
   shouldAttachVideoSource,
-  shouldEarlyLoadNearViewport,
-  shouldEnsureViewportData,
-  shouldForceAutoPreload,
 } from "./auto-play-video-state"
 import { useMountedVideoViewportState } from "./auto-play-video-viewport"
 
@@ -55,8 +51,7 @@ export function AutoPlayVideo({
   const playbackCandidateId = useId()
   const shellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const hasForcedPreloadRef = useRef(false)
-  const hasEnsuredViewportDataRef = useRef(false)
+  const hasPendingPlayAttemptRef = useRef(false)
   const [canUseAutoPreload, setCanUseAutoPreload] = useState(false)
   const [hasAttachedSource, setHasAttachedSource] = useState(false)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
@@ -78,7 +73,6 @@ export function AutoPlayVideo({
     handleLoadedData,
     handleLoadedMetadata,
     hasLoadedFrame,
-    lastReportedLoadIssueRef,
     lastReportedPlayIssueRef,
     queueFrameReady,
     shellAspectRatio,
@@ -116,8 +110,8 @@ export function AutoPlayVideo({
     setHasAttachedSource,
     setIsPlaybackOwner,
     setShouldMountVideo,
-    shouldResetViewportDataRef: hasEnsuredViewportDataRef,
-    shouldResetWarmupRef: hasForcedPreloadRef,
+    shouldResetViewportDataRef: hasPendingPlayAttemptRef,
+    shouldResetWarmupRef: hasPendingPlayAttemptRef,
   })
 
   const shouldRenderVideoSource =
@@ -154,84 +148,6 @@ export function AutoPlayVideo({
       return
     }
 
-    const attemptVideoLoad = (stage: "near-viewport" | "prewarm" | "viewport") => {
-      try {
-        video.load()
-      } catch (error) {
-        reportVideoLoadIssue({
-          distanceToViewport,
-          error,
-          isActive,
-          isInViewport,
-          isMuted,
-          isVisible,
-          lastReportedIssueRef: lastReportedLoadIssueRef,
-          src: normalizedSrc,
-          stage,
-        })
-      }
-    }
-
-    if (
-      shouldEnsureViewportData({
-        hasEnsuredViewportData: hasEnsuredViewportDataRef.current,
-        isInViewport,
-        isPaused: video.paused,
-        readyState: video.readyState,
-      })
-    ) {
-      hasEnsuredViewportDataRef.current = true
-      attemptVideoLoad("viewport")
-      return
-    }
-
-    if (
-      shouldEarlyLoadNearViewport({
-        distanceToViewport,
-        hasLoadedFrame,
-        isActive,
-        readyState: video.readyState,
-      })
-    ) {
-      hasForcedPreloadRef.current = true
-      attemptVideoLoad("near-viewport")
-      return
-    }
-
-    if (
-      !shouldForceAutoPreload({
-        canUseAutoPreload,
-        hasForcedPreload: hasForcedPreloadRef.current,
-        isInViewport,
-        isVisible,
-        readyState: video.readyState,
-      })
-    ) {
-      return
-    }
-
-    hasForcedPreloadRef.current = true
-    attemptVideoLoad("prewarm")
-  }, [
-    canUseAutoPreload,
-    distanceToViewport,
-    hasLoadedFrame,
-    hasVideoSource,
-    isActive,
-    isInViewport,
-    isMuted,
-    isVisible,
-    lastReportedLoadIssueRef,
-    normalizedSrc,
-    shouldRenderVideoSource,
-  ])
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video || !shouldRenderVideoSource) {
-      return
-    }
-
     const playbackDecision = getVideoPlaybackDecision({
       currentTime: video.currentTime,
       distanceToViewport,
@@ -243,6 +159,7 @@ export function AutoPlayVideo({
     })
 
     if (playbackDecision.shouldPause) {
+      hasPendingPlayAttemptRef.current = false
       video.pause()
     }
 
@@ -258,6 +175,10 @@ export function AutoPlayVideo({
       return
     }
 
+    if (hasPendingPlayAttemptRef.current) {
+      return
+    }
+
     const shouldStartMuted = !isMuted
     if (shouldStartMuted) {
       video.defaultMuted = true
@@ -265,12 +186,15 @@ export function AutoPlayVideo({
       video.volume = 0
     }
 
+    hasPendingPlayAttemptRef.current = true
     const playPromise = video.play()
     if (!playPromise || typeof playPromise.then !== "function") {
+      hasPendingPlayAttemptRef.current = false
       return
     }
 
     playPromise.then(() => {
+      hasPendingPlayAttemptRef.current = false
       if (!hasLoadedFrame) {
         queueFrameReady(video)
       }
@@ -283,6 +207,7 @@ export function AutoPlayVideo({
     })
 
     playPromise.catch((error) => {
+      hasPendingPlayAttemptRef.current = false
       reportVideoPlayIssue({
         classification: classifyVideoPlayError(error),
         distanceToViewport,

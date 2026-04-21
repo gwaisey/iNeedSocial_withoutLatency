@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   type Dispatch,
   type MutableRefObject,
@@ -19,6 +20,18 @@ import {
   updateVideoPlaybackCandidate,
 } from "./video-playback-coordinator"
 import { VIDEO_PRELOAD_ROOT_MARGIN } from "./auto-play-video-config"
+
+const VIDEO_PRELOAD_VERTICAL_MARGIN_PX = (() => {
+  const [topMargin = "0"] = VIDEO_PRELOAD_ROOT_MARGIN.trim().split(/\s+/)
+  const parsedTopMargin = Number.parseFloat(topMargin)
+  return Number.isFinite(parsedTopMargin) ? parsedTopMargin : 0
+})()
+
+function isInsidePrewarmWindow(rect: DOMRect | DOMRectReadOnly) {
+  const prewarmTop = -VIDEO_PRELOAD_VERTICAL_MARGIN_PX
+  const prewarmBottom = window.innerHeight + VIDEO_PRELOAD_VERTICAL_MARGIN_PX
+  return rect.bottom >= prewarmTop && rect.top <= prewarmBottom
+}
 
 export function classifyVideoPlayError(error: unknown): "blocked" | "interrupted" | "unexpected" {
   if (!(error instanceof Error)) {
@@ -229,6 +242,19 @@ export function useVideoPrewarmMount({
   readonly setShouldMountVideo: Dispatch<SetStateAction<boolean>>
   readonly shellRef: RefObject<HTMLDivElement | null>
 }) {
+  useLayoutEffect(() => {
+    if (!hasVideoSource || !canPrewarm) {
+      return
+    }
+
+    const shell = shellRef.current
+    if (!shell || !isInsidePrewarmWindow(shell.getBoundingClientRect())) {
+      return
+    }
+
+    setShouldMountVideo(true)
+  }, [canPrewarm, hasVideoSource, setShouldMountVideo, shellRef])
+
   useEffect(() => {
     if (!hasVideoSource) {
       return
