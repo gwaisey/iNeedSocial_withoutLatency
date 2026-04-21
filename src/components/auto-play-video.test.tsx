@@ -208,7 +208,7 @@ describe("AutoPlayVideo", () => {
     })
   })
 
-  it("keeps the fixed portrait shell ratio after metadata loads", async () => {
+  it("updates the shell ratio based on video metadata", async () => {
     const { container } = render(
       <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
     )
@@ -231,6 +231,6 @@ describe("AutoPlayVideo", () => {
 
     fireEvent.loadedMetadata(video)
 
-    expect(shell.style.aspectRatio).toBe("9 / 16")
+    expect(shell.style.aspectRatio).toBe("432 / 768")
   })
 })

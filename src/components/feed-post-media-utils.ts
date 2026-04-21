@@ -4,8 +4,6 @@ export type MediaSurfaceTokens = {
   surface: string
 }
 
-const DEFAULT_VIDEO_HEIGHT_RATIO = 16 / 9
-
 export function isVideoSource(src?: string) {
   return Boolean(src?.endsWith(".mp4"))
 }
@@ -19,7 +17,11 @@ export function getMediaSurfaceTokens(isDark: boolean): MediaSurfaceTokens {
 }
 
 export function buildVideoAspectRatioHeight(video: HTMLVideoElement) {
-  return video.clientWidth * DEFAULT_VIDEO_HEIGHT_RATIO
+  if (video.videoWidth <= 0 || video.videoHeight <= 0) {
+    return video.clientWidth
+  }
+
+  return (video.clientWidth * video.videoHeight) / video.videoWidth
 }
 
 export function buildImageAspectRatioHeight(image: HTMLImageElement) {

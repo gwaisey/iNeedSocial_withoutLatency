@@ -10,6 +10,7 @@ import {
   useVideoPrewarmMount,
   useVideoSourceLifecycleReset,
 } from "./auto-play-video-lifecycle"
+import { useVideoPreloadLink } from "./auto-play-video-preload-link"
 import { syncVideoMutedState, useVideoReadinessState } from "./auto-play-video-readiness"
 import {
   getVideoPlaybackDecision,
@@ -52,6 +53,7 @@ export function AutoPlayVideo({
   const shellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const hasPendingPlayAttemptRef = useRef(false)
+  const hasIssuedLoadHintRef = useRef(false)
   const [canUseAutoPreload, setCanUseAutoPreload] = useState(false)
   const [hasAttachedSource, setHasAttachedSource] = useState(false)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
@@ -114,6 +116,12 @@ export function AutoPlayVideo({
     shouldResetWarmupRef: hasPendingPlayAttemptRef,
   })
 
+  useVideoPreloadLink({
+    candidateId: preloadCandidateId,
+    enabled: canUseAutoPreload && shouldMountVideo,
+    href: normalizedSrc,
+  })
+
   const shouldRenderVideoSource =
     hasVideoSource &&
     shouldMountVideo &&
@@ -132,6 +140,51 @@ export function AutoPlayVideo({
 
     setHasAttachedSource(true)
   }, [hasAttachedSource, shouldRenderVideoSource])
+
+  useEffect(() => {
+    hasIssuedLoadHintRef.current = false
+  }, [normalizedSrc])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (
+      !video ||
+      !hasVideoSource ||
+      !shouldMountVideo ||
+      !hasAttachedSource ||
+      hasIssuedLoadHintRef.current
+    ) {
+      return
+    }
+
+    // Nudge the browser to start fetching bytes for offscreen preload candidates. This is
+    // intentionally fire-once per source to avoid churn while scrolling.
+    if (!canUseAutoPreload && !isNearViewport) {
+      return
+    }
+
+    if (!video.paused || video.currentTime > 0) {
+      return
+    }
+
+    if (video.readyState > 0) {
+      return
+    }
+
+    hasIssuedLoadHintRef.current = true
+    try {
+      video.load()
+    } catch {
+      // Ignore browsers that disallow load() in certain lifecycle moments.
+    }
+  }, [
+    canUseAutoPreload,
+    hasAttachedSource,
+    hasVideoSource,
+    isNearViewport,
+    normalizedSrc,
+    shouldMountVideo,
+  ])
 
   useEffect(() => {
     const video = videoRef.current

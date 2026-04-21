@@ -7,7 +7,7 @@ import {
 } from "./video-preload-budget"
 
 describe("video preload budget", () => {
-  it("prefers visible and below-viewport videos before above-viewport videos", () => {
+  it("preloads only the nearest forward videos and excludes above-viewport candidates while forward videos exist", () => {
     resetVideoPreloadBudgetForTests()
 
     const notifications = new Map<string, boolean>()
@@ -50,21 +50,21 @@ describe("video preload budget", () => {
       direction: "below",
     })
 
-    expect(notifications.get("video-a")).toBe(true)
+    expect(notifications.get("video-a")).toBe(false)
     expect(notifications.get("video-b")).toBe(true)
     expect(notifications.get("video-c")).toBe(false)
     expect(notifications.get("video-d")).toBe(true)
-    expect(notifications.get("video-e")).toBe(true)
+    expect(notifications.get("video-e")).toBe(false)
 
     unregisterVideoPreloadCandidate("video-a")
 
     expect(notifications.get("video-b")).toBe(true)
     expect(notifications.get("video-c")).toBe(false)
     expect(notifications.get("video-d")).toBe(true)
-    expect(notifications.get("video-e")).toBe(true)
+    expect(notifications.get("video-e")).toBe(false)
   })
 
-  it("reserves multiple up-next slots and excludes above-viewport preloads while forward videos exist", () => {
+  it("does not count visible candidates toward the forward preload budget", () => {
     resetVideoPreloadBudgetForTests()
 
     const notifications = new Map<string, boolean>()
@@ -119,10 +119,10 @@ describe("video preload budget", () => {
       direction: "above",
     })
 
-    expect(notifications.get("visible-a")).toBe(true)
-    expect(notifications.get("visible-b")).toBe(true)
-    expect(notifications.get("visible-c")).toBe(true)
-    expect(notifications.get("visible-d")).toBe(true)
+    expect(notifications.get("visible-a")).toBe(false)
+    expect(notifications.get("visible-b")).toBe(false)
+    expect(notifications.get("visible-c")).toBe(false)
+    expect(notifications.get("visible-d")).toBe(false)
     expect(notifications.get("up-next-a")).toBe(true)
     expect(notifications.get("up-next-b")).toBe(true)
     expect(notifications.get("above-nearby")).toBe(false)
@@ -159,7 +159,7 @@ describe("video preload budget", () => {
       direction: "above",
     })
 
-    expect(notifications.get("visible")).toBe(true)
+    expect(notifications.get("visible")).toBe(false)
     expect(notifications.get("above-nearby")).toBe(true)
     expect(notifications.get("above-secondary")).toBe(true)
   })

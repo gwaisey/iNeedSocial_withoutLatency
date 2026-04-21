@@ -7,87 +7,51 @@ type VideoPreloadCandidate = {
   notify: (canUseAutoPreload: boolean) => void
 }
 
-const MAX_AUTO_PRELOAD_VIDEOS = 4
-const MAX_AUTO_PRELOAD_DISTANCE_PX = 2800
+// Keep auto-preloading focused on the next few videos so we buffer enough data
+// for instant playback once a video becomes visible, especially on real networks.
+const MAX_AUTO_PRELOAD_VIDEOS = 2
+const MAX_BELOW_PRELOAD_DISTANCE_PX = 5200
 const MAX_ABOVE_PRELOAD_DISTANCE_PX = 900
-const MAX_UP_NEXT_PRELOAD_VIDEOS = 2
-const MAX_UP_NEXT_PRELOAD_DISTANCE_PX = 5200
 const registry = new Map<string, VideoPreloadCandidate>()
 
-function getPreloadDirectionPriority(direction: VideoPreloadDirection) {
-  switch (direction) {
-    case "visible":
-      return 0
-    case "below":
-      return 1
-    case "above":
-    default:
-      return 2
-  }
-}
-
-function compareCandidates(
-  left: [string, VideoPreloadCandidate],
-  right: [string, VideoPreloadCandidate]
-) {
-  const directionPriorityDifference =
-    getPreloadDirectionPriority(left[1].direction) - getPreloadDirectionPriority(right[1].direction)
-
-  if (directionPriorityDifference !== 0) {
-    return directionPriorityDifference
-  }
-
-  return left[1].distancePx - right[1].distancePx
-}
-
-function getDirectionDistanceLimit(direction: VideoPreloadDirection) {
-  return direction === "above" ? MAX_ABOVE_PRELOAD_DISTANCE_PX : MAX_AUTO_PRELOAD_DISTANCE_PX
-}
-
 function getEligibleCandidates({
-  getMaxDistancePx,
+  direction,
+  maxDistancePx,
 }: {
-  readonly getMaxDistancePx: (candidate: VideoPreloadCandidate) => number
+  readonly direction: Exclude<VideoPreloadDirection, "visible">
+  readonly maxDistancePx: number
 }) {
   return [...registry.entries()]
     .filter(([, candidate]) => {
       return (
         candidate.canPrewarm &&
+        candidate.direction === direction &&
         Number.isFinite(candidate.distancePx) &&
-        candidate.distancePx <= getMaxDistancePx(candidate)
+        candidate.distancePx <= maxDistancePx
       )
     })
-    .sort(compareCandidates)
+    .sort((left, right) => {
+      return left[1].distancePx - right[1].distancePx || left[0].localeCompare(right[0])
+    })
 }
 
 function recomputeBudget() {
-  const forwardCandidateExists = [...registry.values()].some((candidate) => {
-    return (
-      candidate.canPrewarm &&
-      candidate.direction === "below" &&
-      Number.isFinite(candidate.distancePx) &&
-      candidate.distancePx <= MAX_UP_NEXT_PRELOAD_DISTANCE_PX
-    )
+  const belowCandidates = getEligibleCandidates({
+    direction: "below",
+    maxDistancePx: MAX_BELOW_PRELOAD_DISTANCE_PX,
   })
 
-  const eligibleCandidates = getEligibleCandidates({
-    getMaxDistancePx: (candidate) => getDirectionDistanceLimit(candidate.direction),
-  }).filter(([, candidate]) => !forwardCandidateExists || candidate.direction !== "above")
-
-  const autoPreloadIds = new Set(
-    eligibleCandidates
+  const autoPreloadIds = new Set<string>(
+    (belowCandidates.length > 0
+      ? belowCandidates
+      : getEligibleCandidates({
+          direction: "above",
+          maxDistancePx: MAX_ABOVE_PRELOAD_DISTANCE_PX,
+        })
+    )
       .slice(0, MAX_AUTO_PRELOAD_VIDEOS)
       .map(([candidateId]) => candidateId)
   )
-
-  getEligibleCandidates({
-    getMaxDistancePx: () => MAX_UP_NEXT_PRELOAD_DISTANCE_PX,
-  })
-    .filter(([, candidate]) => candidate.direction === "below")
-    .slice(0, MAX_UP_NEXT_PRELOAD_VIDEOS)
-    .forEach(([candidateId]) => {
-      autoPreloadIds.add(candidateId)
-    })
 
   registry.forEach((candidate, candidateId) => {
     candidate.notify(autoPreloadIds.has(candidateId))
