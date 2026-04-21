@@ -59,12 +59,12 @@ describe("video preload budget", () => {
     unregisterVideoPreloadCandidate("video-a")
 
     expect(notifications.get("video-b")).toBe(true)
-    expect(notifications.get("video-c")).toBe(true)
+    expect(notifications.get("video-c")).toBe(false)
     expect(notifications.get("video-d")).toBe(true)
     expect(notifications.get("video-e")).toBe(true)
   })
 
-  it("reserves an up-next slot for the nearest below-viewport video outside the regular pool", () => {
+  it("reserves multiple up-next slots and excludes above-viewport preloads while forward videos exist", () => {
     resetVideoPreloadBudgetForTests()
 
     const notifications = new Map<string, boolean>()
@@ -79,7 +79,8 @@ describe("video preload budget", () => {
     connectCandidate("visible-b")
     connectCandidate("visible-c")
     connectCandidate("visible-d")
-    connectCandidate("up-next")
+    connectCandidate("up-next-a")
+    connectCandidate("up-next-b")
     connectCandidate("above-nearby")
 
     updateVideoPreloadCandidate("visible-a", {
@@ -102,9 +103,14 @@ describe("video preload budget", () => {
       distancePx: 0,
       direction: "visible",
     })
-    updateVideoPreloadCandidate("up-next", {
+    updateVideoPreloadCandidate("up-next-a", {
       canPrewarm: true,
       distancePx: 3_000,
+      direction: "below",
+    })
+    updateVideoPreloadCandidate("up-next-b", {
+      canPrewarm: true,
+      distancePx: 4_400,
       direction: "below",
     })
     updateVideoPreloadCandidate("above-nearby", {
@@ -117,8 +123,45 @@ describe("video preload budget", () => {
     expect(notifications.get("visible-b")).toBe(true)
     expect(notifications.get("visible-c")).toBe(true)
     expect(notifications.get("visible-d")).toBe(true)
-    expect(notifications.get("up-next")).toBe(true)
+    expect(notifications.get("up-next-a")).toBe(true)
+    expect(notifications.get("up-next-b")).toBe(true)
     expect(notifications.get("above-nearby")).toBe(false)
+  })
+
+  it("still allows above-viewport preloads when there are no forward candidates", () => {
+    resetVideoPreloadBudgetForTests()
+
+    const notifications = new Map<string, boolean>()
+
+    const connectCandidate = (candidateId: string) => {
+      registerVideoPreloadCandidate(candidateId, (canUseAutoPreload) => {
+        notifications.set(candidateId, canUseAutoPreload)
+      })
+    }
+
+    connectCandidate("visible")
+    connectCandidate("above-nearby")
+    connectCandidate("above-secondary")
+
+    updateVideoPreloadCandidate("visible", {
+      canPrewarm: true,
+      distancePx: 0,
+      direction: "visible",
+    })
+    updateVideoPreloadCandidate("above-nearby", {
+      canPrewarm: true,
+      distancePx: 40,
+      direction: "above",
+    })
+    updateVideoPreloadCandidate("above-secondary", {
+      canPrewarm: true,
+      distancePx: 400,
+      direction: "above",
+    })
+
+    expect(notifications.get("visible")).toBe(true)
+    expect(notifications.get("above-nearby")).toBe(true)
+    expect(notifications.get("above-secondary")).toBe(true)
   })
 
   it("excludes faraway or disabled candidates from the auto preload pool", () => {
@@ -137,7 +180,7 @@ describe("video preload budget", () => {
     })
     updateVideoPreloadCandidate("far", {
       canPrewarm: true,
-      distancePx: 4_000,
+      distancePx: 6_000,
       direction: "below",
     })
 

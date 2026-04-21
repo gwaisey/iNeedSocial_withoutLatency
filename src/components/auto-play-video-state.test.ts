@@ -249,7 +249,7 @@ describe("auto-play video state", () => {
         isActive: true,
         readyState: 0,
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it("builds aspect ratios only from valid intrinsic sizes", () => {

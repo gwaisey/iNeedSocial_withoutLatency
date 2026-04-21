@@ -8,9 +8,10 @@ type VideoPreloadCandidate = {
 }
 
 const MAX_AUTO_PRELOAD_VIDEOS = 4
-const MAX_AUTO_PRELOAD_DISTANCE_PX = 2200
-const MAX_UP_NEXT_PRELOAD_VIDEOS = 1
-const MAX_UP_NEXT_PRELOAD_DISTANCE_PX = 3600
+const MAX_AUTO_PRELOAD_DISTANCE_PX = 2800
+const MAX_ABOVE_PRELOAD_DISTANCE_PX = 900
+const MAX_UP_NEXT_PRELOAD_VIDEOS = 2
+const MAX_UP_NEXT_PRELOAD_DISTANCE_PX = 5200
 const registry = new Map<string, VideoPreloadCandidate>()
 
 function getPreloadDirectionPriority(direction: VideoPreloadDirection) {
@@ -39,20 +40,39 @@ function compareCandidates(
   return left[1].distancePx - right[1].distancePx
 }
 
-function getEligibleCandidates(maxDistancePx: number) {
+function getDirectionDistanceLimit(direction: VideoPreloadDirection) {
+  return direction === "above" ? MAX_ABOVE_PRELOAD_DISTANCE_PX : MAX_AUTO_PRELOAD_DISTANCE_PX
+}
+
+function getEligibleCandidates({
+  getMaxDistancePx,
+}: {
+  readonly getMaxDistancePx: (candidate: VideoPreloadCandidate) => number
+}) {
   return [...registry.entries()]
     .filter(([, candidate]) => {
       return (
         candidate.canPrewarm &&
         Number.isFinite(candidate.distancePx) &&
-        candidate.distancePx <= maxDistancePx
+        candidate.distancePx <= getMaxDistancePx(candidate)
       )
     })
     .sort(compareCandidates)
 }
 
 function recomputeBudget() {
-  const eligibleCandidates = getEligibleCandidates(MAX_AUTO_PRELOAD_DISTANCE_PX)
+  const forwardCandidateExists = [...registry.values()].some((candidate) => {
+    return (
+      candidate.canPrewarm &&
+      candidate.direction === "below" &&
+      Number.isFinite(candidate.distancePx) &&
+      candidate.distancePx <= MAX_UP_NEXT_PRELOAD_DISTANCE_PX
+    )
+  })
+
+  const eligibleCandidates = getEligibleCandidates({
+    getMaxDistancePx: (candidate) => getDirectionDistanceLimit(candidate.direction),
+  }).filter(([, candidate]) => !forwardCandidateExists || candidate.direction !== "above")
 
   const autoPreloadIds = new Set(
     eligibleCandidates
@@ -60,7 +80,9 @@ function recomputeBudget() {
       .map(([candidateId]) => candidateId)
   )
 
-  getEligibleCandidates(MAX_UP_NEXT_PRELOAD_DISTANCE_PX)
+  getEligibleCandidates({
+    getMaxDistancePx: () => MAX_UP_NEXT_PRELOAD_DISTANCE_PX,
+  })
     .filter(([, candidate]) => candidate.direction === "below")
     .slice(0, MAX_UP_NEXT_PRELOAD_VIDEOS)
     .forEach(([candidateId]) => {
