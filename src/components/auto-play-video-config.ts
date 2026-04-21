@@ -6,6 +6,7 @@ export const VIDEO_EARLY_LOAD_DISTANCE_PX = 1800
 export const DEFAULT_VIDEO_ASPECT_RATIO = "9 / 16"
 export const VIDEO_READY_STATE_CURRENT_DATA = 2
 export const VIDEO_READY_STATE_FUTURE_DATA = 3
+export const VIDEO_REVEAL_PLAYBACK_PROGRESS_S = 0.03
 
 const learnedVideoAspectRatios = new Map<string, string>()
 

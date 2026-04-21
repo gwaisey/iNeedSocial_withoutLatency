@@ -169,6 +169,7 @@ describe("AutoPlayVideo", () => {
     })
     const video = container.querySelector("video")
 
+    video!.currentTime = 0.04
     fireEvent.loadedData(video!)
     expect(video).toHaveClass("opacity-0")
     expect(frameCallback).not.toBeNull()
@@ -199,10 +200,37 @@ describe("AutoPlayVideo", () => {
     })
     const video = container.querySelector("video")
 
+    video!.currentTime = 0.04
     fireEvent.loadedData(video!)
 
     await waitFor(() => {
       expect(video).toHaveClass("opacity-100")
     })
+  })
+
+  it("keeps the fixed portrait shell ratio after metadata loads", async () => {
+    const { container } = render(
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector("video")).not.toBeNull()
+    })
+
+    const video = container.querySelector("video") as HTMLVideoElement
+    const shell = video.parentElement as HTMLDivElement
+
+    Object.defineProperty(video, "videoWidth", {
+      configurable: true,
+      value: 432,
+    })
+    Object.defineProperty(video, "videoHeight", {
+      configurable: true,
+      value: 768,
+    })
+
+    fireEvent.loadedMetadata(video)
+
+    expect(shell.style.aspectRatio).toBe("9 / 16")
   })
 })

@@ -10,12 +10,10 @@ import {
 } from "react"
 import {
   DEFAULT_VIDEO_ASPECT_RATIO,
-  getKnownVideoAspectRatio,
-  rememberVideoAspectRatio,
+  VIDEO_REVEAL_PLAYBACK_PROGRESS_S,
   VIDEO_READY_STATE_CURRENT_DATA,
 } from "./auto-play-video-config"
 import { scheduleFirstRenderableVideoFrame } from "./auto-play-video-frame"
-import { buildVideoAspectRatio } from "./auto-play-video-state"
 
 function clearQueuedVideoFrame(
   frameReadyCleanupRef: MutableRefObject<(() => void) | null>,
@@ -24,6 +22,42 @@ function clearQueuedVideoFrame(
   frameReadyCleanupRef.current?.()
   frameReadyCleanupRef.current = null
   hasQueuedFrameReadyRef.current = false
+}
+
+function waitForPlaybackProgress(
+  video: HTMLVideoElement,
+  onReady: () => void
+) {
+  let cancelled = false
+  let animationFrameId: number | null = null
+
+  const checkPlaybackProgress = () => {
+    if (cancelled) {
+      return
+    }
+
+    if (video.currentTime >= VIDEO_REVEAL_PLAYBACK_PROGRESS_S) {
+      cancelled = true
+      onReady()
+      return
+    }
+
+    animationFrameId = window.requestAnimationFrame(checkPlaybackProgress)
+  }
+
+  checkPlaybackProgress()
+
+  return () => {
+    cancelled = true
+
+    if (animationFrameId !== null) {
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }
+}
+
+function canRevealVideoSurface(video: HTMLVideoElement) {
+  return !video.paused || video.currentTime > 0
 }
 
 function ensureVideoFrameReady({
@@ -44,9 +78,11 @@ function ensureVideoFrameReady({
   hasQueuedFrameReadyRef.current = true
   frameReadyCleanupRef.current?.()
   frameReadyCleanupRef.current = scheduleFirstRenderableVideoFrame(video, () => {
-    frameReadyCleanupRef.current = null
-    hasQueuedFrameReadyRef.current = false
-    setHasLoadedFrame(true)
+    frameReadyCleanupRef.current = waitForPlaybackProgress(video, () => {
+      frameReadyCleanupRef.current = null
+      hasQueuedFrameReadyRef.current = false
+      setHasLoadedFrame(true)
+    })
   })
 }
 
@@ -74,9 +110,6 @@ export function useVideoReadinessState({
   const lastReportedLoadIssueRef = useRef<string | null>(null)
   const lastReportedPlayIssueRef = useRef<string | null>(null)
   const [hasLoadedFrame, setHasLoadedFrame] = useState(false)
-  const [shellAspectRatio, setShellAspectRatio] = useState(
-    () => getKnownVideoAspectRatio(normalizedSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO
-  )
 
   useEffect(() => {
     return () => {
@@ -87,7 +120,6 @@ export function useVideoReadinessState({
   useEffect(() => {
     clearQueuedVideoFrame(frameReadyCleanupRef, hasQueuedFrameReadyRef)
     setHasLoadedFrame(false)
-    setShellAspectRatio(getKnownVideoAspectRatio(normalizedSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO)
     lastReportedLoadIssueRef.current = null
     lastReportedPlayIssueRef.current = null
   }, [normalizedSrc])
@@ -96,13 +128,14 @@ export function useVideoReadinessState({
     const video = videoRef.current
     if (
       !video ||
-      !hasVideoSource ||
-      !shouldMountVideo ||
-      hasLoadedFrame ||
-      video.readyState < VIDEO_READY_STATE_CURRENT_DATA
-    ) {
-      return
-    }
+    !hasVideoSource ||
+    !shouldMountVideo ||
+    hasLoadedFrame ||
+    video.readyState < VIDEO_READY_STATE_CURRENT_DATA ||
+    !canRevealVideoSurface(video)
+  ) {
+    return
+  }
 
     ensureVideoFrameReady({
       frameReadyCleanupRef,
@@ -113,6 +146,10 @@ export function useVideoReadinessState({
   }, [hasLoadedFrame, hasVideoSource, shouldMountVideo, videoRef])
 
   const handleLoadedData = (event: SyntheticEvent<HTMLVideoElement>) => {
+    if (!canRevealVideoSurface(event.currentTarget)) {
+      return
+    }
+
     ensureVideoFrameReady({
       frameReadyCleanupRef,
       hasQueuedFrameReadyRef,
@@ -122,16 +159,6 @@ export function useVideoReadinessState({
   }
 
   const handleLoadedMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
-    const learnedAspectRatio = buildVideoAspectRatio({
-      videoHeight: event.currentTarget.videoHeight,
-      videoWidth: event.currentTarget.videoWidth,
-    })
-
-    if (learnedAspectRatio) {
-      rememberVideoAspectRatio(normalizedSrc, learnedAspectRatio)
-      setShellAspectRatio(learnedAspectRatio)
-    }
-
     onLoadedMetadata?.(event)
   }
 
@@ -149,6 +176,6 @@ export function useVideoReadinessState({
         video,
       })
     },
-    shellAspectRatio,
+    shellAspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
   }
 }

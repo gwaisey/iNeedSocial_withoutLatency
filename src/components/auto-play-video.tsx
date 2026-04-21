@@ -258,7 +258,7 @@ export function AutoPlayVideo({
       {hasVideoSource && shouldMountVideo && (
         <video
           ref={videoRef}
-          className={`${className} absolute inset-0 h-full w-full ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
+          className={`${className} absolute inset-0 h-full w-full object-cover ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
           loop
           muted={isMuted}
           onLoadedData={handleLoadedData}

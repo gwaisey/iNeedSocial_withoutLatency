@@ -76,6 +76,22 @@ async function waitForRenderedVideoMedia(page: Page, postId: string) {
   }, postId)
 }
 
+async function waitForRenderedVideoFallbackMedia(page: Page, postId: string) {
+  await page.waitForFunction((targetPostId) => {
+    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
+    if (!post) {
+      return false
+    }
+
+    const poster = post.querySelector('img[aria-hidden="true"]')
+    if (!(poster instanceof HTMLImageElement)) {
+      return false
+    }
+
+    return poster.complete && poster.naturalWidth > 0
+  }, postId)
+}
+
 async function waitForVideoPlaying(page: Page, postId: string) {
   await page.waitForFunction((targetPostId) => {
     const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
@@ -226,7 +242,7 @@ test("autoplay failures are buffered locally without crashing the feed", async (
   await startStudy(page)
   await dismissTutorialIfVisible(page)
   await scrollPostIntoView(page, "post-video-sample")
-  await waitForRenderedVideoMedia(page, "post-video-sample")
+  await waitForRenderedVideoFallbackMedia(page, "post-video-sample")
   await expect(page.locator('[data-regular-post-id="post-video-sample"]')).toBeVisible()
 
   await expect
