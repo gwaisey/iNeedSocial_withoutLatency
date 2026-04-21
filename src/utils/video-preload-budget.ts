@@ -9,6 +9,8 @@ type VideoPreloadCandidate = {
 
 const MAX_AUTO_PRELOAD_VIDEOS = 4
 const MAX_AUTO_PRELOAD_DISTANCE_PX = 2200
+const MAX_UP_NEXT_PRELOAD_VIDEOS = 1
+const MAX_UP_NEXT_PRELOAD_DISTANCE_PX = 3600
 const registry = new Map<string, VideoPreloadCandidate>()
 
 function getPreloadDirectionPriority(direction: VideoPreloadDirection) {
@@ -23,31 +25,47 @@ function getPreloadDirectionPriority(direction: VideoPreloadDirection) {
   }
 }
 
-function recomputeBudget() {
-  const eligibleCandidates = [...registry.entries()]
+function compareCandidates(
+  left: [string, VideoPreloadCandidate],
+  right: [string, VideoPreloadCandidate]
+) {
+  const directionPriorityDifference =
+    getPreloadDirectionPriority(left[1].direction) - getPreloadDirectionPriority(right[1].direction)
+
+  if (directionPriorityDifference !== 0) {
+    return directionPriorityDifference
+  }
+
+  return left[1].distancePx - right[1].distancePx
+}
+
+function getEligibleCandidates(maxDistancePx: number) {
+  return [...registry.entries()]
     .filter(([, candidate]) => {
       return (
         candidate.canPrewarm &&
         Number.isFinite(candidate.distancePx) &&
-        candidate.distancePx <= MAX_AUTO_PRELOAD_DISTANCE_PX
+        candidate.distancePx <= maxDistancePx
       )
     })
-    .sort((left, right) => {
-      const directionPriorityDifference =
-        getPreloadDirectionPriority(left[1].direction) - getPreloadDirectionPriority(right[1].direction)
+    .sort(compareCandidates)
+}
 
-      if (directionPriorityDifference !== 0) {
-        return directionPriorityDifference
-      }
-
-      return left[1].distancePx - right[1].distancePx
-    })
+function recomputeBudget() {
+  const eligibleCandidates = getEligibleCandidates(MAX_AUTO_PRELOAD_DISTANCE_PX)
 
   const autoPreloadIds = new Set(
     eligibleCandidates
       .slice(0, MAX_AUTO_PRELOAD_VIDEOS)
       .map(([candidateId]) => candidateId)
   )
+
+  getEligibleCandidates(MAX_UP_NEXT_PRELOAD_DISTANCE_PX)
+    .filter(([, candidate]) => candidate.direction === "below")
+    .slice(0, MAX_UP_NEXT_PRELOAD_VIDEOS)
+    .forEach(([candidateId]) => {
+      autoPreloadIds.add(candidateId)
+    })
 
   registry.forEach((candidate, candidateId) => {
     candidate.notify(autoPreloadIds.has(candidateId))

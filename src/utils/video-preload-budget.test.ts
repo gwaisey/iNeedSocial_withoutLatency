@@ -64,6 +64,63 @@ describe("video preload budget", () => {
     expect(notifications.get("video-e")).toBe(true)
   })
 
+  it("reserves an up-next slot for the nearest below-viewport video outside the regular pool", () => {
+    resetVideoPreloadBudgetForTests()
+
+    const notifications = new Map<string, boolean>()
+
+    const connectCandidate = (candidateId: string) => {
+      registerVideoPreloadCandidate(candidateId, (canUseAutoPreload) => {
+        notifications.set(candidateId, canUseAutoPreload)
+      })
+    }
+
+    connectCandidate("visible-a")
+    connectCandidate("visible-b")
+    connectCandidate("visible-c")
+    connectCandidate("visible-d")
+    connectCandidate("up-next")
+    connectCandidate("above-nearby")
+
+    updateVideoPreloadCandidate("visible-a", {
+      canPrewarm: true,
+      distancePx: 0,
+      direction: "visible",
+    })
+    updateVideoPreloadCandidate("visible-b", {
+      canPrewarm: true,
+      distancePx: 0,
+      direction: "visible",
+    })
+    updateVideoPreloadCandidate("visible-c", {
+      canPrewarm: true,
+      distancePx: 0,
+      direction: "visible",
+    })
+    updateVideoPreloadCandidate("visible-d", {
+      canPrewarm: true,
+      distancePx: 0,
+      direction: "visible",
+    })
+    updateVideoPreloadCandidate("up-next", {
+      canPrewarm: true,
+      distancePx: 3_000,
+      direction: "below",
+    })
+    updateVideoPreloadCandidate("above-nearby", {
+      canPrewarm: true,
+      distancePx: 40,
+      direction: "above",
+    })
+
+    expect(notifications.get("visible-a")).toBe(true)
+    expect(notifications.get("visible-b")).toBe(true)
+    expect(notifications.get("visible-c")).toBe(true)
+    expect(notifications.get("visible-d")).toBe(true)
+    expect(notifications.get("up-next")).toBe(true)
+    expect(notifications.get("above-nearby")).toBe(false)
+  })
+
   it("excludes faraway or disabled candidates from the auto preload pool", () => {
     resetVideoPreloadBudgetForTests()
 
@@ -80,7 +137,7 @@ describe("video preload budget", () => {
     })
     updateVideoPreloadCandidate("far", {
       canPrewarm: true,
-      distancePx: 2_400,
+      distancePx: 4_000,
       direction: "below",
     })
 
