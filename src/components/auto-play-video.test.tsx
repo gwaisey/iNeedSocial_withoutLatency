@@ -252,7 +252,7 @@ describe("AutoPlayVideo", () => {
     const video = container.querySelector("video") as HTMLVideoElement
     const shell = video.parentElement as HTMLDivElement
 
-    expect(shell.style.aspectRatio).toBe("540 / 300")
+    expect(shell.style.aspectRatio).toBe("720 / 400")
 
     Object.defineProperty(video, "videoWidth", {
       configurable: true,
@@ -265,7 +265,7 @@ describe("AutoPlayVideo", () => {
 
     fireEvent.loadedMetadata(video)
 
-    expect(shell.style.aspectRatio).toBe("540 / 300")
+    expect(shell.style.aspectRatio).toBe("720 / 400")
   })
 
   it("uses hls.js for Cloudflare Stream manifests when native HLS is unavailable", async () => {

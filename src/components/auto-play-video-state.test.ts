@@ -15,31 +15,31 @@ describe("auto-play video state", () => {
       rootBottom: 800,
       rootTop: 0,
       targetBottom: 900,
-      targetTop: 700,
+      targetTop: 710,
       wasVisible: false,
     })
     expect(belowStartThreshold).toMatchObject({
-      centerOffset: 400,
+      centerOffset: 405,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: false,
     })
-    expect(belowStartThreshold.visibleFraction).toBeCloseTo(0.5)
+    expect(belowStartThreshold.visibleFraction).toBeCloseTo(90 / 190)
 
     const aboveStartThreshold = deriveVideoViewportState({
       rootBottom: 800,
       rootTop: 0,
       targetBottom: 900,
-      targetTop: 650,
+      targetTop: 700,
       wasVisible: false,
     })
     expect(aboveStartThreshold).toMatchObject({
-      centerOffset: 375,
+      centerOffset: 400,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: true,
     })
-    expect(aboveStartThreshold.visibleFraction).toBeCloseTo(0.6)
+    expect(aboveStartThreshold.visibleFraction).toBeCloseTo(0.5)
 
     const aboveStopThreshold = deriveVideoViewportState({
       rootBottom: 800,

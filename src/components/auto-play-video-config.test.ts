@@ -56,7 +56,7 @@ describe("auto-play video config", () => {
   })
 
   it("derives a stable aspect ratio from known poster dimensions", () => {
-    expect(getKnownVideoAspectRatio("/content/videos/captain-america.mp4")).toBe("540 / 300")
+    expect(getKnownVideoAspectRatio("/content/videos/captain-america.mp4")).toBe("720 / 400")
     expect(getKnownVideoAspectRatio("/content/videos/pinata.mp4")).toBe("480 / 854")
     expect(getKnownVideoAspectRatio("/content/files/photo.jpg")).toBeUndefined()
   })
