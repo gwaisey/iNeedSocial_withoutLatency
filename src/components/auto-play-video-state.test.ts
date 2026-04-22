@@ -10,36 +10,36 @@ import {
 } from "./auto-play-video-state"
 
 describe("auto-play video state", () => {
-  it("uses overlap hysteresis before treating a video as visibly active", () => {
+  it("allows the next video to become visibly active without a handoff dead zone", () => {
     const belowStartThreshold = deriveVideoViewportState({
       rootBottom: 800,
       rootTop: 0,
       targetBottom: 900,
-      targetTop: 710,
+      targetTop: 747,
       wasVisible: false,
     })
     expect(belowStartThreshold).toMatchObject({
-      centerOffset: 405,
+      centerOffset: 423.5,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: false,
     })
-    expect(belowStartThreshold.visibleFraction).toBeCloseTo(90 / 190)
+    expect(belowStartThreshold.visibleFraction).toBeCloseTo(53 / 153)
 
     const aboveStartThreshold = deriveVideoViewportState({
       rootBottom: 800,
       rootTop: 0,
       targetBottom: 900,
-      targetTop: 700,
+      targetTop: 746,
       wasVisible: false,
     })
     expect(aboveStartThreshold).toMatchObject({
-      centerOffset: 400,
+      centerOffset: 423,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: true,
     })
-    expect(aboveStartThreshold.visibleFraction).toBeCloseTo(0.5)
+    expect(aboveStartThreshold.visibleFraction).toBeCloseTo(54 / 154)
 
     const aboveStopThreshold = deriveVideoViewportState({
       rootBottom: 800,

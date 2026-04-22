@@ -1,7 +1,7 @@
 import { KNOWN_VIDEO_POSTER_DIMENSIONS } from "./auto-play-video-poster-dimensions"
 
 export const VIDEO_PRELOAD_ROOT_MARGIN = "5200px 0px"
-export const VIDEO_PLAY_START_VISIBLE_RATIO = 0.5
+export const VIDEO_PLAY_START_VISIBLE_RATIO = 0.35
 export const VIDEO_PLAY_STOP_VISIBLE_RATIO = 0.35
 export const VIDEO_RESET_DISTANCE_PX = 220
 export const VIDEO_EARLY_LOAD_DISTANCE_PX = 1800
