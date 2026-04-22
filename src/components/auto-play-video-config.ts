@@ -34,6 +34,10 @@ export function isDirectVideoFileSource(src?: string) {
   return /\.mp4($|\?)/i.test(src ?? "")
 }
 
+export function isHlsManifestSource(src?: string) {
+  return /\.m3u8($|\?)/i.test(src ?? "")
+}
+
 function getLocalVideoPosterSource(src?: string) {
   if (!src?.includes("/content/videos/") || !isDirectVideoFileSource(src)) {
     return undefined
@@ -52,6 +56,14 @@ export function getCloudflareStreamManifestUrl(
   }
 
   return `https://customer-${customerCode}.cloudflarestream.com/${normalizedStreamUid}/manifest/video.m3u8`
+}
+
+export function getCloudflareStreamOrigin(customerCode = getCloudflareStreamCustomerCode()) {
+  if (!customerCode) {
+    return undefined
+  }
+
+  return `https://customer-${customerCode}.cloudflarestream.com`
 }
 
 export function getCloudflareStreamThumbnailUrl(

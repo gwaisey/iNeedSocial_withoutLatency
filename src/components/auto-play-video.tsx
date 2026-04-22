@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type RefObject, type SyntheticEvent
 import {
   getResolvedVideoSource,
   getVideoPosterSource,
+  isHlsManifestSource,
   isDirectVideoFileSource,
 } from "./auto-play-video-config"
 import {
@@ -14,6 +15,10 @@ import {
 } from "./auto-play-video-lifecycle"
 import { useVideoPreloadLink } from "./auto-play-video-preload-link"
 import { syncVideoMutedState, useVideoReadinessState } from "./auto-play-video-readiness"
+import {
+  preloadHlsRuntime,
+  useCloudflareStreamWarmup,
+} from "./auto-play-video-stream-warmup"
 import {
   getVideoPlaybackDecision,
   shouldAttachVideoSource,
@@ -34,10 +39,6 @@ type AutoPlayVideoProps = {
   readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly src?: string
   readonly streamUid?: string
-}
-
-function isHlsManifestSource(src?: string) {
-  return /\.m3u8($|\?)/i.test(src ?? "")
 }
 
 function canUseNativeHlsPlayback(video: HTMLVideoElement) {
@@ -115,13 +116,15 @@ export function AutoPlayVideo({
     videoRef,
   })
 
-  loadIssueContextRef.current = {
-    distanceToViewport,
-    isActive,
-    isInViewport,
-    isMuted,
-    isVisible,
-  }
+  useEffect(() => {
+    loadIssueContextRef.current = {
+      distanceToViewport,
+      isActive,
+      isInViewport,
+      isMuted,
+      isVisible,
+    }
+  }, [distanceToViewport, isActive, isInViewport, isMuted, isVisible])
 
   useVideoCandidateLifecycle({
     canPrewarm,
@@ -173,6 +176,15 @@ export function AutoPlayVideo({
       isNearViewport,
       isVisible,
     })
+  const shouldWarmCloudflareStream =
+    shouldMountVideo &&
+    isHlsManifestSource(resolvedSrc) &&
+    (canUseAutoPreload || isNearViewport || isInViewport || isVisible)
+
+  useCloudflareStreamWarmup({
+    enabled: shouldWarmCloudflareStream,
+    manifestUrl: resolvedSrc,
+  })
 
   useEffect(() => {
     if (!shouldRenderVideoSource || hasAttachedSource) {
@@ -228,7 +240,7 @@ export function AutoPlayVideo({
     if (!isHlsManifestSource(resolvedSrc) || canUseNativeHlsPlayback(video)) {
       bindDirectSource()
     } else {
-      void import("hls.js")
+      void preloadHlsRuntime()
         .then(({ default: Hls }) => {
           if (cancelled) {
             return

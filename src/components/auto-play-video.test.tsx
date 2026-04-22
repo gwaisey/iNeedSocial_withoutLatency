@@ -1,6 +1,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AutoPlayVideo } from "./auto-play-video"
+import { resetCloudflareStreamWarmupState } from "./auto-play-video-stream-warmup"
 
 const hlsAttachMediaSpy = vi.fn()
 const hlsLoadSourceSpy = vi.fn()
@@ -68,6 +69,7 @@ describe("AutoPlayVideo", () => {
   let originalLoad: typeof HTMLMediaElement.prototype.load
   let originalRequestVideoFrameCallback: unknown
   let originalCancelVideoFrameCallback: unknown
+  let originalFetch: typeof globalThis.fetch | undefined
 
   beforeEach(() => {
     originalIntersectionObserver = window.IntersectionObserver
@@ -82,6 +84,7 @@ describe("AutoPlayVideo", () => {
       HTMLVideoElement.prototype,
       "cancelVideoFrameCallback"
     )
+    originalFetch = globalThis.fetch
 
     window.IntersectionObserver = MockIntersectionObserver
     HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
@@ -95,6 +98,7 @@ describe("AutoPlayVideo", () => {
     HTMLMediaElement.prototype.play = originalPlay
     HTMLMediaElement.prototype.pause = originalPause
     HTMLMediaElement.prototype.load = originalLoad
+    resetCloudflareStreamWarmupState()
 
     if (typeof originalRequestVideoFrameCallback === "undefined") {
       Reflect.deleteProperty(HTMLVideoElement.prototype, "requestVideoFrameCallback")
@@ -114,6 +118,12 @@ describe("AutoPlayVideo", () => {
         "cancelVideoFrameCallback",
         originalCancelVideoFrameCallback
       )
+    }
+
+    if (typeof originalFetch === "undefined") {
+      Reflect.deleteProperty(globalThis, "fetch")
+    } else {
+      globalThis.fetch = originalFetch
     }
 
     vi.restoreAllMocks()
@@ -278,5 +288,44 @@ describe("AutoPlayVideo", () => {
     })
 
     expect(hlsAttachMediaSpy).toHaveBeenCalledWith(container.querySelector("video"))
+  })
+
+  it("warms Cloudflare Stream playback with preconnect links and a manifest fetch", async () => {
+    vi.stubEnv("VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE", "mjiwvs3h8hhcy2t8")
+    vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("")
+
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true } as Response)
+    globalThis.fetch = fetchSpy as typeof fetch
+
+    render(
+      <AutoPlayVideo
+        className="video"
+        isMuted={true}
+        src="/content/videos/pinata.mp4"
+        streamUid="dad0deb02906401e5950bfe6816fb4a4"
+      />
+    )
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/manifest/video.m3u8",
+        {
+          cache: "force-cache",
+          credentials: "omit",
+          mode: "cors",
+        }
+      )
+    })
+
+    expect(
+      document.head.querySelector(
+        'link[rel="dns-prefetch"][href="https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com"]'
+      )
+    ).not.toBeNull()
+    expect(
+      document.head.querySelector(
+        'link[rel="preconnect"][href="https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com"]'
+      )
+    ).not.toBeNull()
   })
 })
