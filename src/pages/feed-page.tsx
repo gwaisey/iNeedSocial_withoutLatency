@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { BrandLogo } from "../components/brand-logo"
 import { CommentSheet } from "../components/comment-sheet"
@@ -149,17 +149,22 @@ function FeedPostList({
 
 function FeedCompletionCta({
   borderClassName,
+  completionCtaRef,
   isDark,
   isSavingSession,
   onEndSession,
 }: {
   readonly borderClassName: string
+  readonly completionCtaRef: RefObject<HTMLDivElement | null>
   readonly isDark: boolean
   readonly isSavingSession: boolean
   readonly onEndSession: () => void
 }) {
   return (
-    <div className={`flex flex-col items-center gap-3 py-10 border-t ${borderClassName}`}>
+    <div
+      ref={completionCtaRef}
+      className={`flex flex-col items-center gap-3 py-10 border-t ${borderClassName}`}
+    >
       <p
         className={`text-[11px] font-medium tracking-widest uppercase ${
           isDark ? "text-white/35" : "text-ink/35"
@@ -185,6 +190,7 @@ function FeedCompletionCta({
 
 function FeedBody({
   borderClassName,
+  completionCtaRef,
   dividerClassName,
   feedError,
   hasMorePosts,
@@ -205,6 +211,7 @@ function FeedBody({
   visiblePosts,
 }: {
   readonly borderClassName: string
+  readonly completionCtaRef: RefObject<HTMLDivElement | null>
   readonly dividerClassName: string
   readonly feedError: string | null
   readonly hasMorePosts: boolean
@@ -255,6 +262,7 @@ function FeedBody({
       {payload && !feedError && !hasMorePosts && (
         <FeedCompletionCta
           borderClassName={borderClassName}
+          completionCtaRef={completionCtaRef}
           isDark={isDark}
           isSavingSession={isSavingSession}
           onEndSession={onEndSession}
@@ -313,10 +321,12 @@ export function FeedPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false)
+  const [isCompletionCtaVisible, setIsCompletionCtaVisible] = useState(false)
 
   const participantShellRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
+  const completionCtaRef = useRef<HTMLDivElement | null>(null)
 
   const {
     commentSheet,
@@ -382,6 +392,39 @@ export function FeedPage() {
     scrollRef.current.scrollTop = 0
   }, [])
 
+  useEffect(() => {
+    if (!payload || feedError || hasMorePosts) {
+      setIsCompletionCtaVisible(false)
+      return
+    }
+
+    const root = scrollRef.current
+    const target = completionCtaRef.current
+
+    if (!root || !target) {
+      setIsCompletionCtaVisible(false)
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsCompletionCtaVisible(entry?.isIntersecting ?? false)
+      },
+      {
+        root,
+        // Start the handoff slightly before the two CTAs would overlap visually.
+        rootMargin: "0px 0px 104px 0px",
+        threshold: 0,
+      }
+    )
+
+    observer.observe(target)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [feedError, hasMorePosts, payload])
+
   const { handleConfirmExitSession, handleEndSession, handleThemeToggle } = useFeedPageActions({
     captureThemeToggleScrollState,
     closeCommentSheet,
@@ -429,6 +472,7 @@ export function FeedPage() {
 
           <FeedBody
             borderClassName={borderCls}
+            completionCtaRef={completionCtaRef}
             dividerClassName={dividerCls}
             feedError={feedError}
             hasMorePosts={hasMorePosts}
@@ -454,22 +498,24 @@ export function FeedPage() {
 
         <RightPanel theme={themeMode} />
 
-        <FeedEndSessionButton
-          className="
-            md:hidden fixed left-1/2 -translate-x-1/2 z-50
-            flex h-14 w-14 items-center justify-center rounded-full
-            bg-white shadow-[0_8px_28px_rgba(18,17,25,0.22)]
-            active:scale-90 transition-transform disabled:opacity-70
-          "
-          dataTestId="timer-open-button-mobile"
-          disabled={isSavingSession}
-          label="Akhiri sesi"
-          onClick={() => {
-            void handleEndSession()
-          }}
-          style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
-          width={30}
-        />
+        {!isCompletionCtaVisible && (
+          <FeedEndSessionButton
+            className="
+              md:hidden fixed left-1/2 -translate-x-1/2 z-50
+              flex h-14 w-14 items-center justify-center rounded-full
+              bg-white shadow-[0_8px_28px_rgba(18,17,25,0.22)]
+              active:scale-90 transition-transform disabled:opacity-70
+            "
+            dataTestId="timer-open-button-mobile"
+            disabled={isSavingSession}
+            label="Akhiri sesi"
+            onClick={() => {
+              void handleEndSession()
+            }}
+            style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+            width={30}
+          />
+        )}
       </div>
       <FeedPageOverlays
         commentSheet={commentSheet}
