@@ -10,6 +10,7 @@ import {
 import { reportRuntimeIssue } from "../utils/runtime-monitoring"
 import {
   registerVideoPreloadCandidate,
+  type VideoPreloadRank,
   type VideoPreloadDirection,
   unregisterVideoPreloadCandidate,
   updateVideoPreloadCandidate,
@@ -153,7 +154,7 @@ export function useVideoCandidateLifecycle({
   playbackVisibilityScore,
   preloadDirection,
   preloadCandidateId,
-  setCanUseAutoPreload,
+  setAutoPreloadRank,
   setIsPlaybackOwner,
   shouldMountVideo,
 }: {
@@ -167,21 +168,21 @@ export function useVideoCandidateLifecycle({
   readonly playbackVisibilityScore: number
   readonly preloadDirection: VideoPreloadDirection
   readonly preloadCandidateId: string
-  readonly setCanUseAutoPreload: Dispatch<SetStateAction<boolean>>
+  readonly setAutoPreloadRank: Dispatch<SetStateAction<VideoPreloadRank>>
   readonly setIsPlaybackOwner: Dispatch<SetStateAction<boolean>>
   readonly shouldMountVideo: boolean
 }) {
   useEffect(() => {
     if (!hasVideoSource) {
-      setCanUseAutoPreload(false)
+      setAutoPreloadRank(null)
       return
     }
 
-    registerVideoPreloadCandidate(preloadCandidateId, setCanUseAutoPreload)
+    registerVideoPreloadCandidate(preloadCandidateId, setAutoPreloadRank)
     return () => {
       unregisterVideoPreloadCandidate(preloadCandidateId)
     }
-  }, [hasVideoSource, preloadCandidateId, setCanUseAutoPreload])
+  }, [hasVideoSource, preloadCandidateId, setAutoPreloadRank])
 
   useEffect(() => {
     if (!hasVideoSource) {
@@ -290,7 +291,7 @@ export function useVideoPrewarmMount({
 
 export function useVideoSourceLifecycleReset({
   normalizedSrc,
-  setCanUseAutoPreload,
+  setAutoPreloadRank,
   setHasAttachedSource,
   setIsPlaybackOwner,
   setShouldMountVideo,
@@ -298,7 +299,7 @@ export function useVideoSourceLifecycleReset({
   shouldResetWarmupRef,
 }: {
   readonly normalizedSrc?: string
-  readonly setCanUseAutoPreload: Dispatch<SetStateAction<boolean>>
+  readonly setAutoPreloadRank: Dispatch<SetStateAction<VideoPreloadRank>>
   readonly setHasAttachedSource: Dispatch<SetStateAction<boolean>>
   readonly setIsPlaybackOwner: Dispatch<SetStateAction<boolean>>
   readonly setShouldMountVideo: Dispatch<SetStateAction<boolean>>
@@ -313,7 +314,7 @@ export function useVideoSourceLifecycleReset({
     }
 
     previousSourceRef.current = normalizedSrc
-    setCanUseAutoPreload(false)
+    setAutoPreloadRank(null)
     setHasAttachedSource(false)
     setIsPlaybackOwner(false)
     setShouldMountVideo(false)
@@ -321,7 +322,7 @@ export function useVideoSourceLifecycleReset({
     shouldResetViewportDataRef.current = false
   }, [
     normalizedSrc,
-    setCanUseAutoPreload,
+    setAutoPreloadRank,
     setHasAttachedSource,
     setIsPlaybackOwner,
     setShouldMountVideo,

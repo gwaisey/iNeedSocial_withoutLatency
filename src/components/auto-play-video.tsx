@@ -4,6 +4,7 @@ import {
   getVideoPosterSource,
   isHlsManifestSource,
   isDirectVideoFileSource,
+  VIDEO_EARLY_LOAD_DISTANCE_PX,
 } from "./auto-play-video-config"
 import {
   classifyVideoPlayError,
@@ -80,7 +81,7 @@ export function AutoPlayVideo({
   const sourceCleanupRef = useRef<(() => void) | null>(null)
   const hasPendingPlayAttemptRef = useRef(false)
   const hasIssuedLoadHintRef = useRef(false)
-  const [canUseAutoPreload, setCanUseAutoPreload] = useState(false)
+  const [autoPreloadRank, setAutoPreloadRank] = useState<number | null>(null)
   const [hasAttachedSource, setHasAttachedSource] = useState(false)
   const [hasConnectedPlaybackSource, setHasConnectedPlaybackSource] = useState(false)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
@@ -138,7 +139,7 @@ export function AutoPlayVideo({
     playbackVisibilityScore: visibleFraction,
     preloadDirection,
     preloadCandidateId,
-    setCanUseAutoPreload,
+    setAutoPreloadRank,
     setIsPlaybackOwner,
     shouldMountVideo,
   })
@@ -150,13 +151,15 @@ export function AutoPlayVideo({
   })
   useVideoSourceLifecycleReset({
     normalizedSrc: resolvedSrc,
-    setCanUseAutoPreload,
+    setAutoPreloadRank,
     setHasAttachedSource,
     setIsPlaybackOwner,
     setShouldMountVideo,
     shouldResetViewportDataRef: hasPendingPlayAttemptRef,
     shouldResetWarmupRef: hasPendingPlayAttemptRef,
   })
+
+  const canUseAutoPreload = autoPreloadRank !== null
 
   useVideoPreloadLink({
     candidateId: preloadCandidateId,
@@ -182,8 +185,14 @@ export function AutoPlayVideo({
     shouldMountVideo &&
     isHlsManifestSource(resolvedSrc) &&
     (canUseAutoPreload || isNearViewport || isInViewport || isVisible)
+  const shouldDeepPrebufferCloudflareStream =
+    autoPreloadRank === 0 &&
+    preloadDirection === "below" &&
+    !isInViewport &&
+    distanceToViewport <= VIDEO_EARLY_LOAD_DISTANCE_PX
 
   useCloudflareStreamWarmup({
+    deepPrebuffer: shouldDeepPrebufferCloudflareStream,
     enabled: shouldWarmCloudflareStream,
     manifestUrl: resolvedSrc,
   })

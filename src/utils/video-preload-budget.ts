@@ -1,10 +1,11 @@
 export type VideoPreloadDirection = "above" | "below" | "visible"
+export type VideoPreloadRank = number | null
 
 type VideoPreloadCandidate = {
   canPrewarm: boolean
   distancePx: number
   direction: VideoPreloadDirection
-  notify: (canUseAutoPreload: boolean) => void
+  notify: (preloadRank: VideoPreloadRank) => void
 }
 
 // Keep auto-preloading focused on the next few videos so we buffer enough data
@@ -41,7 +42,7 @@ function recomputeBudget() {
     maxDistancePx: MAX_BELOW_PRELOAD_DISTANCE_PX,
   })
 
-  const autoPreloadIds = new Set<string>(
+  const preloadRanks = new Map<string, number>(
     (belowCandidates.length > 0
       ? belowCandidates
       : getEligibleCandidates({
@@ -50,17 +51,17 @@ function recomputeBudget() {
         })
     )
       .slice(0, MAX_AUTO_PRELOAD_VIDEOS)
-      .map(([candidateId]) => candidateId)
+      .map(([candidateId], index) => [candidateId, index])
   )
 
   registry.forEach((candidate, candidateId) => {
-    candidate.notify(autoPreloadIds.has(candidateId))
+    candidate.notify(preloadRanks.get(candidateId) ?? null)
   })
 }
 
 export function registerVideoPreloadCandidate(
   candidateId: string,
-  notify: (canUseAutoPreload: boolean) => void
+  notify: (preloadRank: VideoPreloadRank) => void
 ) {
   registry.set(candidateId, {
     canPrewarm: false,

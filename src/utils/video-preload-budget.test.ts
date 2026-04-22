@@ -10,11 +10,11 @@ describe("video preload budget", () => {
   it("preloads only the nearest forward videos and excludes above-viewport candidates while forward videos exist", () => {
     resetVideoPreloadBudgetForTests()
 
-    const notifications = new Map<string, boolean>()
+    const notifications = new Map<string, number | null>()
 
     const connectCandidate = (candidateId: string) => {
-      registerVideoPreloadCandidate(candidateId, (canUseAutoPreload) => {
-        notifications.set(candidateId, canUseAutoPreload)
+      registerVideoPreloadCandidate(candidateId, (preloadRank) => {
+        notifications.set(candidateId, preloadRank)
       })
     }
 
@@ -50,28 +50,28 @@ describe("video preload budget", () => {
       direction: "below",
     })
 
-    expect(notifications.get("video-a")).toBe(false)
-    expect(notifications.get("video-b")).toBe(true)
-    expect(notifications.get("video-c")).toBe(false)
-    expect(notifications.get("video-d")).toBe(true)
-    expect(notifications.get("video-e")).toBe(false)
+    expect(notifications.get("video-a")).toBeNull()
+    expect(notifications.get("video-b")).toBe(0)
+    expect(notifications.get("video-c")).toBeNull()
+    expect(notifications.get("video-d")).toBe(1)
+    expect(notifications.get("video-e")).toBeNull()
 
     unregisterVideoPreloadCandidate("video-a")
 
-    expect(notifications.get("video-b")).toBe(true)
-    expect(notifications.get("video-c")).toBe(false)
-    expect(notifications.get("video-d")).toBe(true)
-    expect(notifications.get("video-e")).toBe(false)
+    expect(notifications.get("video-b")).toBe(0)
+    expect(notifications.get("video-c")).toBeNull()
+    expect(notifications.get("video-d")).toBe(1)
+    expect(notifications.get("video-e")).toBeNull()
   })
 
   it("does not count visible candidates toward the forward preload budget", () => {
     resetVideoPreloadBudgetForTests()
 
-    const notifications = new Map<string, boolean>()
+    const notifications = new Map<string, number | null>()
 
     const connectCandidate = (candidateId: string) => {
-      registerVideoPreloadCandidate(candidateId, (canUseAutoPreload) => {
-        notifications.set(candidateId, canUseAutoPreload)
+      registerVideoPreloadCandidate(candidateId, (preloadRank) => {
+        notifications.set(candidateId, preloadRank)
       })
     }
 
@@ -119,23 +119,23 @@ describe("video preload budget", () => {
       direction: "above",
     })
 
-    expect(notifications.get("visible-a")).toBe(false)
-    expect(notifications.get("visible-b")).toBe(false)
-    expect(notifications.get("visible-c")).toBe(false)
-    expect(notifications.get("visible-d")).toBe(false)
-    expect(notifications.get("up-next-a")).toBe(true)
-    expect(notifications.get("up-next-b")).toBe(true)
-    expect(notifications.get("above-nearby")).toBe(false)
+    expect(notifications.get("visible-a")).toBeNull()
+    expect(notifications.get("visible-b")).toBeNull()
+    expect(notifications.get("visible-c")).toBeNull()
+    expect(notifications.get("visible-d")).toBeNull()
+    expect(notifications.get("up-next-a")).toBe(0)
+    expect(notifications.get("up-next-b")).toBe(1)
+    expect(notifications.get("above-nearby")).toBeNull()
   })
 
   it("still allows above-viewport preloads when there are no forward candidates", () => {
     resetVideoPreloadBudgetForTests()
 
-    const notifications = new Map<string, boolean>()
+    const notifications = new Map<string, number | null>()
 
     const connectCandidate = (candidateId: string) => {
-      registerVideoPreloadCandidate(candidateId, (canUseAutoPreload) => {
-        notifications.set(candidateId, canUseAutoPreload)
+      registerVideoPreloadCandidate(candidateId, (preloadRank) => {
+        notifications.set(candidateId, preloadRank)
       })
     }
 
@@ -159,9 +159,9 @@ describe("video preload budget", () => {
       direction: "above",
     })
 
-    expect(notifications.get("visible")).toBe(false)
-    expect(notifications.get("above-nearby")).toBe(true)
-    expect(notifications.get("above-secondary")).toBe(true)
+    expect(notifications.get("visible")).toBeNull()
+    expect(notifications.get("above-nearby")).toBe(0)
+    expect(notifications.get("above-secondary")).toBe(1)
   })
 
   it("excludes faraway or disabled candidates from the auto preload pool", () => {
@@ -184,8 +184,8 @@ describe("video preload budget", () => {
       direction: "below",
     })
 
-    expect(notifyNear).toHaveBeenLastCalledWith(true)
-    expect(notifyFar).toHaveBeenLastCalledWith(false)
+    expect(notifyNear).toHaveBeenLastCalledWith(0)
+    expect(notifyFar).toHaveBeenLastCalledWith(null)
 
     updateVideoPreloadCandidate("near", {
       canPrewarm: false,
@@ -193,6 +193,6 @@ describe("video preload budget", () => {
       direction: "below",
     })
 
-    expect(notifyNear).toHaveBeenLastCalledWith(false)
+    expect(notifyNear).toHaveBeenLastCalledWith(null)
   })
 })
