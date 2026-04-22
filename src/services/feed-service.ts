@@ -57,6 +57,7 @@ const rawMediaSchema = z
     alt: z.string().trim().min(1),
     poster: z.string().optional(),
     streamUid: z.string().trim().min(1).optional(),
+    streamDelivery: z.enum(["hls", "mp4"]).optional(),
   })
   .strict()
 

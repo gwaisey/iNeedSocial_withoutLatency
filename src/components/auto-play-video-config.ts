@@ -65,6 +65,18 @@ export function getCloudflareStreamManifestUrl(
   return `https://customer-${customerCode}.cloudflarestream.com/${normalizedStreamUid}/manifest/video.m3u8`
 }
 
+export function getCloudflareStreamDownloadUrl(
+  streamUid?: string,
+  customerCode = getCloudflareStreamCustomerCode()
+) {
+  const normalizedStreamUid = streamUid?.trim()
+  if (!normalizedStreamUid || !customerCode) {
+    return undefined
+  }
+
+  return `https://customer-${customerCode}.cloudflarestream.com/${normalizedStreamUid}/downloads/default.mp4`
+}
+
 export function getCloudflareStreamOrigin(customerCode = getCloudflareStreamCustomerCode()) {
   if (!customerCode) {
     return undefined
@@ -85,7 +97,15 @@ export function getCloudflareStreamThumbnailUrl(
   return `https://customer-${customerCode}.cloudflarestream.com/${normalizedStreamUid}/thumbnails/thumbnail.jpg`
 }
 
-export function getResolvedVideoSource(src?: string, streamUid?: string) {
+export function getResolvedVideoSource(
+  src?: string,
+  streamUid?: string,
+  streamDelivery: "hls" | "mp4" = "hls"
+) {
+  if (streamDelivery === "mp4") {
+    return getCloudflareStreamDownloadUrl(streamUid) ?? getNormalizedVideoSource(src)
+  }
+
   return getCloudflareStreamManifestUrl(streamUid) ?? getNormalizedVideoSource(src)
 }
 

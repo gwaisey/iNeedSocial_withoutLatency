@@ -125,6 +125,7 @@ describe("feed-service helpers", () => {
               {
                 src: "/content/files/placeholder.jpg",
                 alt: "uji",
+                streamDelivery: "mp4",
                 streamUid: "dad0deb02906401e5950bfe6816fb4a4",
               },
             ],

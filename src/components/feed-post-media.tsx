@@ -39,6 +39,7 @@ function FeedVideoSurface({
   scrollRootRef,
   shellClassName,
   streamUid,
+  streamDelivery,
   tokens,
 }: {
   readonly canPrewarm?: boolean
@@ -50,6 +51,7 @@ function FeedVideoSurface({
   readonly onPosterLoad?: (image: HTMLImageElement) => void
   readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly shellClassName?: string
+  readonly streamDelivery?: FeedMediaItem["streamDelivery"]
   readonly streamUid?: string
   readonly tokens: MediaSurfaceTokens
 }) {
@@ -67,6 +69,7 @@ function FeedVideoSurface({
       shellClassName={shellClassName}
       skeletonClassName={tokens.skeletonTone}
       src={media?.src}
+      streamDelivery={streamDelivery ?? media?.streamDelivery}
       streamUid={streamUid ?? media?.streamUid}
     />
   )

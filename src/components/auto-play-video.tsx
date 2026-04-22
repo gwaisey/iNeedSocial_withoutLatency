@@ -39,6 +39,7 @@ type AutoPlayVideoProps = {
   readonly skeletonClassName?: string
   readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly src?: string
+  readonly streamDelivery?: "hls" | "mp4"
   readonly streamUid?: string
 }
 
@@ -62,9 +63,10 @@ export function AutoPlayVideo({
   skeletonClassName = "",
   scrollRootRef,
   src,
+  streamDelivery,
   streamUid,
 }: AutoPlayVideoProps) {
-  const resolvedSrc = getResolvedVideoSource(src, streamUid)
+  const resolvedSrc = getResolvedVideoSource(src, streamUid, streamDelivery)
   const resolvedPoster = getVideoPosterSource(src, poster, streamUid)
   const hasVideoSource = Boolean(resolvedSrc)
   const preloadCandidateId = useId()
