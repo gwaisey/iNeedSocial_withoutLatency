@@ -2,6 +2,7 @@ type VideoPlaybackCandidate = {
   notify: (isPlaybackOwner: boolean) => void
   priority: number
   shouldOwnPlayback: boolean
+  visibilityScore: number
 }
 
 const playbackRegistry = new Map<string, VideoPlaybackCandidate>()
@@ -13,7 +14,11 @@ function recomputePlaybackOwner() {
         return candidate.shouldOwnPlayback && Number.isFinite(candidate.priority)
       })
       .sort((left, right) => {
-        return left[1].priority - right[1].priority || left[0].localeCompare(right[0])
+        return (
+          right[1].visibilityScore - left[1].visibilityScore ||
+          left[1].priority - right[1].priority ||
+          left[0].localeCompare(right[0])
+        )
       })[0]?.[0] ?? null
 
   playbackRegistry.forEach((candidate, candidateId) => {
@@ -29,6 +34,7 @@ export function registerVideoPlaybackCandidate(
     notify,
     priority: Number.POSITIVE_INFINITY,
     shouldOwnPlayback: false,
+    visibilityScore: 0,
   })
   recomputePlaybackOwner()
 }
@@ -46,9 +52,11 @@ export function updateVideoPlaybackCandidate(
   {
     priority,
     shouldOwnPlayback,
+    visibilityScore,
   }: {
     priority: number
     shouldOwnPlayback: boolean
+    visibilityScore: number
   }
 ) {
   const candidate = playbackRegistry.get(candidateId)
@@ -58,6 +66,7 @@ export function updateVideoPlaybackCandidate(
 
   candidate.priority = shouldOwnPlayback ? priority : Number.POSITIVE_INFINITY
   candidate.shouldOwnPlayback = shouldOwnPlayback
+  candidate.visibilityScore = shouldOwnPlayback ? visibilityScore : 0
   recomputePlaybackOwner()
 }
 

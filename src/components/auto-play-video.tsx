@@ -92,6 +92,7 @@ export function AutoPlayVideo({
     isVisible,
     playbackPriority,
     preloadDirection,
+    visibleFraction,
   } = useMountedVideoViewportState({
     hasVideoSource,
     scrollRootRef,
@@ -134,6 +135,7 @@ export function AutoPlayVideo({
     isVisible,
     playbackCandidateId,
     playbackPriority,
+    playbackVisibilityScore: visibleFraction,
     preloadDirection,
     preloadCandidateId,
     setCanUseAutoPreload,

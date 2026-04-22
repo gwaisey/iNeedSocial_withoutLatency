@@ -21,14 +21,17 @@ describe("video playback coordinator", () => {
     updateVideoPlaybackCandidate("video-a", {
       priority: 240,
       shouldOwnPlayback: true,
+      visibilityScore: 0.62,
     })
     updateVideoPlaybackCandidate("video-b", {
       priority: 120,
       shouldOwnPlayback: true,
+      visibilityScore: 0.62,
     })
     updateVideoPlaybackCandidate("video-c", {
       priority: 420,
       shouldOwnPlayback: true,
+      visibilityScore: 0.62,
     })
 
     expect(ownerA).toHaveBeenLastCalledWith(false)
@@ -53,10 +56,36 @@ describe("video playback coordinator", () => {
     updateVideoPlaybackCandidate("video-a", {
       priority: 20,
       shouldOwnPlayback: false,
+      visibilityScore: 0.8,
     })
     updateVideoPlaybackCandidate("video-b", {
       priority: 60,
       shouldOwnPlayback: true,
+      visibilityScore: 0.75,
+    })
+
+    expect(ownerA).toHaveBeenLastCalledWith(false)
+    expect(ownerB).toHaveBeenLastCalledWith(true)
+  })
+
+  it("prefers the most visible eligible video before center proximity", () => {
+    resetVideoPlaybackCoordinatorForTests()
+
+    const ownerA = vi.fn()
+    const ownerB = vi.fn()
+
+    registerVideoPlaybackCandidate("video-a", ownerA)
+    registerVideoPlaybackCandidate("video-b", ownerB)
+
+    updateVideoPlaybackCandidate("video-a", {
+      priority: 30,
+      shouldOwnPlayback: true,
+      visibilityScore: 0.45,
+    })
+    updateVideoPlaybackCandidate("video-b", {
+      priority: 160,
+      shouldOwnPlayback: true,
+      visibilityScore: 0.82,
     })
 
     expect(ownerA).toHaveBeenLastCalledWith(false)

@@ -11,65 +11,82 @@ import {
 
 describe("auto-play video state", () => {
   it("uses overlap hysteresis before treating a video as visibly active", () => {
-    expect(
-      deriveVideoViewportState({
-        rootBottom: 800,
-        rootTop: 0,
-        targetBottom: 900,
-        targetTop: 700,
-        wasVisible: false,
-      })
-    ).toEqual({
+    const belowStartThreshold = deriveVideoViewportState({
+      rootBottom: 800,
+      rootTop: 0,
+      targetBottom: 900,
+      targetTop: 700,
+      wasVisible: false,
+    })
+    expect(belowStartThreshold).toMatchObject({
       centerOffset: 400,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: false,
     })
+    expect(belowStartThreshold.visibleFraction).toBeCloseTo(0.5)
 
-    expect(
-      deriveVideoViewportState({
-        rootBottom: 800,
-        rootTop: 0,
-        targetBottom: 900,
-        targetTop: 650,
-        wasVisible: false,
-      })
-    ).toEqual({
+    const aboveStartThreshold = deriveVideoViewportState({
+      rootBottom: 800,
+      rootTop: 0,
+      targetBottom: 900,
+      targetTop: 650,
+      wasVisible: false,
+    })
+    expect(aboveStartThreshold).toMatchObject({
       centerOffset: 375,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: true,
     })
+    expect(aboveStartThreshold.visibleFraction).toBeCloseTo(0.6)
 
-    expect(
-      deriveVideoViewportState({
-        rootBottom: 800,
-        rootTop: 0,
-        targetBottom: 900,
-        targetTop: 744,
-        wasVisible: true,
-      })
-    ).toEqual({
+    const aboveStopThreshold = deriveVideoViewportState({
+      rootBottom: 800,
+      rootTop: 0,
+      targetBottom: 900,
+      targetTop: 744,
+      wasVisible: true,
+    })
+    expect(aboveStopThreshold).toMatchObject({
       centerOffset: 422,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: true,
     })
+    expect(aboveStopThreshold.visibleFraction).toBeCloseTo(56 / 156)
 
-    expect(
-      deriveVideoViewportState({
-        rootBottom: 800,
-        rootTop: 0,
-        targetBottom: 900,
-        targetTop: 760,
-        wasVisible: true,
-      })
-    ).toEqual({
+    const belowStopThreshold = deriveVideoViewportState({
+      rootBottom: 800,
+      rootTop: 0,
+      targetBottom: 900,
+      targetTop: 760,
+      wasVisible: true,
+    })
+    expect(belowStopThreshold).toMatchObject({
       centerOffset: 430,
       distanceToViewport: 0,
       isInViewport: true,
       isVisible: false,
     })
+    expect(belowStopThreshold.visibleFraction).toBeCloseTo(40 / 140)
+  })
+
+  it("treats tall videos as visibly active when most of the viewport-capable area is covered", () => {
+    const tallVideoState = deriveVideoViewportState({
+      rootBottom: 800,
+      rootTop: 0,
+      targetBottom: 1_000,
+      targetTop: -200,
+      wasVisible: false,
+    })
+
+    expect(tallVideoState).toMatchObject({
+      distanceToViewport: 0,
+      isInViewport: true,
+      isVisible: true,
+    })
+    expect(tallVideoState.visibleFraction).toBe(1)
   })
 
   it("pauses or resets offscreen media and only plays active visible videos", () => {

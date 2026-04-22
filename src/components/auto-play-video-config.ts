@@ -1,14 +1,21 @@
 import { KNOWN_VIDEO_POSTER_DIMENSIONS } from "./auto-play-video-poster-dimensions"
 
 export const VIDEO_PRELOAD_ROOT_MARGIN = "5200px 0px"
-export const VIDEO_PLAY_START_OVERLAP_PX = 140
-export const VIDEO_PLAY_STOP_OVERLAP_PX = 56
+export const VIDEO_PLAY_START_VISIBLE_RATIO = 0.6
+export const VIDEO_PLAY_STOP_VISIBLE_RATIO = 0.35
 export const VIDEO_RESET_DISTANCE_PX = 220
 export const VIDEO_EARLY_LOAD_DISTANCE_PX = 1800
 export const DEFAULT_VIDEO_ASPECT_RATIO = "9 / 16"
 export const VIDEO_READY_STATE_CURRENT_DATA = 2
 export const VIDEO_READY_STATE_FUTURE_DATA = 3
 export const VIDEO_REVEAL_PLAYBACK_PROGRESS_S = 0.03
+export const VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS = [
+  0,
+  VIDEO_PLAY_STOP_VISIBLE_RATIO,
+  VIDEO_PLAY_START_VISIBLE_RATIO,
+  0.75,
+  1,
+]
 
 const learnedVideoAspectRatios = new Map<string, string>()
 

@@ -150,6 +150,7 @@ export function useVideoCandidateLifecycle({
   isVisible,
   playbackCandidateId,
   playbackPriority,
+  playbackVisibilityScore,
   preloadDirection,
   preloadCandidateId,
   setCanUseAutoPreload,
@@ -163,6 +164,7 @@ export function useVideoCandidateLifecycle({
   readonly isVisible: boolean
   readonly playbackCandidateId: string
   readonly playbackPriority: number
+  readonly playbackVisibilityScore: number
   readonly preloadDirection: VideoPreloadDirection
   readonly preloadCandidateId: string
   readonly setCanUseAutoPreload: Dispatch<SetStateAction<boolean>>
@@ -219,6 +221,7 @@ export function useVideoCandidateLifecycle({
 
     updateVideoPlaybackCandidate(playbackCandidateId, {
       priority: playbackPriority,
+      visibilityScore: playbackVisibilityScore,
       shouldOwnPlayback: hasVideoSource && shouldMountVideo && isActive && isVisible,
     })
   }, [
@@ -227,6 +230,7 @@ export function useVideoCandidateLifecycle({
     isVisible,
     playbackCandidateId,
     playbackPriority,
+    playbackVisibilityScore,
     shouldMountVideo,
   ])
 }

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
 import type { VideoPreloadDirection } from "../utils/video-preload-budget"
-import { VIDEO_EARLY_LOAD_DISTANCE_PX } from "./auto-play-video-config"
+import {
+  VIDEO_EARLY_LOAD_DISTANCE_PX,
+  VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS,
+} from "./auto-play-video-config"
 import { deriveVideoViewportState, getViewportBounds } from "./auto-play-video-state"
 
 type ViewportSubscriber = () => void
@@ -11,6 +14,7 @@ type VideoViewportState = {
   readonly isVisible: boolean
   readonly playbackPriority: number
   readonly preloadDirection: VideoPreloadDirection
+  readonly visibleFraction: number
 }
 
 const INITIAL_VIDEO_VIEWPORT_STATE: VideoViewportState = {
@@ -19,6 +23,7 @@ const INITIAL_VIDEO_VIEWPORT_STATE: VideoViewportState = {
   isVisible: false,
   playbackPriority: Number.POSITIVE_INFINITY,
   preloadDirection: "below",
+  visibleFraction: 0,
 }
 
 function getViewportPreloadDirection(
@@ -138,12 +143,24 @@ export function useMountedVideoViewportState({
           shellRect.top,
           shellRect.bottom
         ),
+        visibleFraction: nextViewportState.visibleFraction,
       })
     }
 
     updateViewportState()
+
+    const intersectionObserver = new IntersectionObserver(() => {
+      updateViewportState()
+    }, {
+      root: scrollRootRef?.current ?? null,
+      threshold: VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS,
+    })
+
+    intersectionObserver.observe(shell)
+
     const unsubscribe = subscribeToViewportEvents(updateViewportState)
     return () => {
+      intersectionObserver.disconnect()
       unsubscribe()
     }
   }, [hasVideoSource, scrollRootRef, shellRef, shouldMountVideo])

@@ -1,7 +1,7 @@
 import {
   VIDEO_EARLY_LOAD_DISTANCE_PX,
-  VIDEO_PLAY_START_OVERLAP_PX,
-  VIDEO_PLAY_STOP_OVERLAP_PX,
+  VIDEO_PLAY_START_VISIBLE_RATIO,
+  VIDEO_PLAY_STOP_VISIBLE_RATIO,
   VIDEO_READY_STATE_CURRENT_DATA,
   VIDEO_READY_STATE_FUTURE_DATA,
   VIDEO_RESET_DISTANCE_PX,
@@ -12,6 +12,7 @@ export type VideoViewportState = {
   readonly distanceToViewport: number
   readonly isInViewport: boolean
   readonly isVisible: boolean
+  readonly visibleFraction: number
 }
 
 export type VideoPlaybackDecision = {
@@ -66,6 +67,24 @@ function getViewportCenterOffset(
   return Math.abs(targetCenter - rootCenter)
 }
 
+function getViewportVisibleFraction(
+  overlapHeight: number,
+  rootTop: number,
+  rootBottom: number,
+  targetTop: number,
+  targetBottom: number
+) {
+  const rootHeight = Math.max(0, rootBottom - rootTop)
+  const targetHeight = Math.max(0, targetBottom - targetTop)
+  const maxVisibleHeight = Math.min(rootHeight, targetHeight)
+
+  if (maxVisibleHeight <= 0) {
+    return 0
+  }
+
+  return Math.min(1, overlapHeight / maxVisibleHeight)
+}
+
 export function deriveVideoViewportState({
   rootBottom,
   rootTop,
@@ -81,13 +100,23 @@ export function deriveVideoViewportState({
 }): VideoViewportState {
   const overlapHeight = getViewportOverlapHeight(rootTop, rootBottom, targetTop, targetBottom)
   const distanceToViewport = getDistanceToViewport(rootTop, rootBottom, targetTop, targetBottom)
-  const requiredOverlap = wasVisible ? VIDEO_PLAY_STOP_OVERLAP_PX : VIDEO_PLAY_START_OVERLAP_PX
+  const visibleFraction = getViewportVisibleFraction(
+    overlapHeight,
+    rootTop,
+    rootBottom,
+    targetTop,
+    targetBottom
+  )
+  const requiredVisibleFraction = wasVisible
+    ? VIDEO_PLAY_STOP_VISIBLE_RATIO
+    : VIDEO_PLAY_START_VISIBLE_RATIO
 
   return {
     centerOffset: getViewportCenterOffset(rootTop, rootBottom, targetTop, targetBottom),
     distanceToViewport,
     isInViewport: overlapHeight > 0,
-    isVisible: overlapHeight >= requiredOverlap,
+    isVisible: overlapHeight > 0 && visibleFraction >= requiredVisibleFraction,
+    visibleFraction,
   }
 }
 
