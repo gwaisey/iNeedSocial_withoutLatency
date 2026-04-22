@@ -111,6 +111,30 @@ describe("feed-service helpers", () => {
     ).toThrow("Format feed tidak valid.")
   })
 
+  it("allows video posts backed by a Cloudflare Stream uid", () => {
+    expect(() =>
+      validateFeedPayload({
+        posts: [
+          {
+            id: "post-stream-video",
+            type: "video",
+            username: "uji",
+            likes: "10",
+            caption: "uji",
+            media: [
+              {
+                src: "/content/files/placeholder.jpg",
+                alt: "uji",
+                streamUid: "dad0deb02906401e5950bfe6816fb4a4",
+              },
+            ],
+            genre: "humor",
+          },
+        ],
+      })
+    ).not.toThrow()
+  })
+
   it("allows mixed-media carousels while rejecting single-item carousels", () => {
     expect(() =>
       validateFeedPayload({

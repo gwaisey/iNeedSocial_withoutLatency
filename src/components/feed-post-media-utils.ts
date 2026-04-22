@@ -1,4 +1,8 @@
-import { getKnownVideoPosterDimensions } from "./auto-play-video-config"
+import type { MediaItem } from "../types/social"
+import {
+  getKnownVideoPosterDimensions,
+  isDirectVideoFileSource,
+} from "./auto-play-video-config"
 
 export type MediaSurfaceTokens = {
   placeholder: string
@@ -6,8 +10,8 @@ export type MediaSurfaceTokens = {
   surface: string
 }
 
-export function isVideoSource(src?: string) {
-  return Boolean(src?.endsWith(".mp4"))
+export function isVideoMedia(media?: Pick<MediaItem, "src" | "streamUid">) {
+  return Boolean(media?.streamUid?.trim()) || isDirectVideoFileSource(media?.src)
 }
 
 export function getMediaSurfaceTokens(isDark: boolean): MediaSurfaceTokens {

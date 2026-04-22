@@ -14,7 +14,7 @@ import {
   buildVideoAspectRatioHeight,
   buildImageAspectRatioHeight,
   getMediaSurfaceTokens,
-  isVideoSource,
+  isVideoMedia,
   type MediaSurfaceTokens,
 } from "./feed-post-media-utils"
 
@@ -38,6 +38,7 @@ function FeedVideoSurface({
   onPosterLoad,
   scrollRootRef,
   shellClassName,
+  streamUid,
   tokens,
 }: {
   readonly canPrewarm?: boolean
@@ -49,6 +50,7 @@ function FeedVideoSurface({
   readonly onPosterLoad?: (image: HTMLImageElement) => void
   readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly shellClassName?: string
+  readonly streamUid?: string
   readonly tokens: MediaSurfaceTokens
 }) {
   return (
@@ -65,6 +67,7 @@ function FeedVideoSurface({
       shellClassName={shellClassName}
       skeletonClassName={tokens.skeletonTone}
       src={media?.src}
+      streamUid={streamUid ?? media?.streamUid}
     />
   )
 }
@@ -142,7 +145,7 @@ function FeedPostCarouselMedia({
   readonly tokens: MediaSurfaceTokens
 }) {
   const { media } = post
-  const mediaHasVideo = media.some((item) => isVideoSource(item.src))
+  const mediaHasVideo = media.some((item) => isVideoMedia(item))
   const {
     activeIdx,
     currentSlideHeight,
@@ -212,7 +215,7 @@ function FeedPostCarouselMedia({
         }}
       >
         {media.map((item, index) =>
-          isVideoSource(item.src) ? (
+          isVideoMedia(item) ? (
             <FeedVideoSurface
               key={item.src}
               canPrewarm={Math.abs(index - activeIdx) <= 1}

@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState, type RefObject, type SyntheticEvent } from "react"
 import {
-  getNormalizedVideoSource,
+  getResolvedVideoSource,
   getVideoPosterSource,
+  isDirectVideoFileSource,
 } from "./auto-play-video-config"
 import {
   classifyVideoPlayError,
+  reportVideoLoadIssue,
   reportVideoPlayIssue,
   useVideoCandidateLifecycle,
   useVideoPrewarmMount,
@@ -31,6 +33,18 @@ type AutoPlayVideoProps = {
   readonly skeletonClassName?: string
   readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly src?: string
+  readonly streamUid?: string
+}
+
+function isHlsManifestSource(src?: string) {
+  return /\.m3u8($|\?)/i.test(src ?? "")
+}
+
+function canUseNativeHlsPlayback(video: HTMLVideoElement) {
+  return Boolean(
+    video.canPlayType("application/vnd.apple.mpegurl") ||
+      video.canPlayType("application/x-mpegURL")
+  )
 }
 
 export function AutoPlayVideo({
@@ -46,18 +60,28 @@ export function AutoPlayVideo({
   skeletonClassName = "",
   scrollRootRef,
   src,
+  streamUid,
 }: AutoPlayVideoProps) {
-  const normalizedSrc = getNormalizedVideoSource(src)
-  const resolvedPoster = getVideoPosterSource(normalizedSrc, poster)
-  const hasVideoSource = Boolean(normalizedSrc)
+  const resolvedSrc = getResolvedVideoSource(src, streamUid)
+  const resolvedPoster = getVideoPosterSource(src, poster, streamUid)
+  const hasVideoSource = Boolean(resolvedSrc)
   const preloadCandidateId = useId()
   const playbackCandidateId = useId()
   const shellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const loadIssueContextRef = useRef({
+    distanceToViewport: 0,
+    isActive,
+    isInViewport: false,
+    isMuted,
+    isVisible: false,
+  })
+  const sourceCleanupRef = useRef<(() => void) | null>(null)
   const hasPendingPlayAttemptRef = useRef(false)
   const hasIssuedLoadHintRef = useRef(false)
   const [canUseAutoPreload, setCanUseAutoPreload] = useState(false)
   const [hasAttachedSource, setHasAttachedSource] = useState(false)
+  const [hasConnectedPlaybackSource, setHasConnectedPlaybackSource] = useState(false)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
   const [shouldMountVideo, setShouldMountVideo] = useState(false)
   const {
@@ -78,17 +102,26 @@ export function AutoPlayVideo({
     handleLoadedMetadata,
     handlePosterLoad,
     hasLoadedFrame,
+    lastReportedLoadIssueRef,
     lastReportedPlayIssueRef,
     queueFrameReady,
     shellAspectRatio,
   } = useVideoReadinessState({
     hasVideoSource,
-    normalizedSrc,
+    normalizedSrc: resolvedSrc,
     onLoadedMetadata,
     posterSrc: resolvedPoster,
     shouldMountVideo,
     videoRef,
   })
+
+  loadIssueContextRef.current = {
+    distanceToViewport,
+    isActive,
+    isInViewport,
+    isMuted,
+    isVisible,
+  }
 
   useVideoCandidateLifecycle({
     canPrewarm,
@@ -111,7 +144,7 @@ export function AutoPlayVideo({
     shellRef,
   })
   useVideoSourceLifecycleReset({
-    normalizedSrc,
+    normalizedSrc: resolvedSrc,
     setCanUseAutoPreload,
     setHasAttachedSource,
     setIsPlaybackOwner,
@@ -122,8 +155,12 @@ export function AutoPlayVideo({
 
   useVideoPreloadLink({
     candidateId: preloadCandidateId,
-    enabled: canUseAutoPreload && shouldMountVideo,
-    href: normalizedSrc,
+    enabled:
+      canUseAutoPreload &&
+      shouldMountVideo &&
+      hasAttachedSource &&
+      isDirectVideoFileSource(resolvedSrc),
+    href: resolvedSrc,
   })
 
   const shouldRenderVideoSource =
@@ -146,14 +183,136 @@ export function AutoPlayVideo({
   }, [hasAttachedSource, shouldRenderVideoSource])
 
   useEffect(() => {
+    sourceCleanupRef.current?.()
+    sourceCleanupRef.current = null
+    setHasConnectedPlaybackSource(false)
+  }, [resolvedSrc])
+
+  useEffect(() => {
     hasIssuedLoadHintRef.current = false
-  }, [normalizedSrc])
+  }, [resolvedSrc])
+
+  useEffect(() => {
+    return () => {
+      sourceCleanupRef.current?.()
+      sourceCleanupRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !resolvedSrc || !hasAttachedSource || !shouldRenderVideoSource) {
+      return
+    }
+
+    let cancelled = false
+
+    const bindDirectSource = () => {
+      video.src = resolvedSrc
+      setHasConnectedPlaybackSource(true)
+      sourceCleanupRef.current = () => {
+        video.pause()
+        video.removeAttribute("src")
+        try {
+          video.load()
+        } catch {
+          // Ignore browsers that complain about detaching the current source.
+        }
+      }
+    }
+
+    sourceCleanupRef.current?.()
+    sourceCleanupRef.current = null
+    setHasConnectedPlaybackSource(false)
+
+    if (!isHlsManifestSource(resolvedSrc) || canUseNativeHlsPlayback(video)) {
+      bindDirectSource()
+    } else {
+      void import("hls.js")
+        .then(({ default: Hls }) => {
+          if (cancelled) {
+            return
+          }
+
+          if (!Hls.isSupported()) {
+            const context = loadIssueContextRef.current
+            reportVideoLoadIssue({
+              distanceToViewport: context.distanceToViewport,
+              error: new Error("HLS playback is not supported by this browser."),
+              isActive: context.isActive,
+              isInViewport: context.isInViewport,
+              isMuted: context.isMuted,
+              isVisible: context.isVisible,
+              lastReportedIssueRef: lastReportedLoadIssueRef,
+              src: resolvedSrc,
+              stage: context.isVisible
+                ? "viewport"
+                : context.isInViewport
+                  ? "near-viewport"
+                  : "prewarm",
+            })
+            return
+          }
+
+          const hls = new Hls()
+          hls.loadSource(resolvedSrc)
+          hls.attachMedia(video)
+
+          setHasConnectedPlaybackSource(true)
+          sourceCleanupRef.current = () => {
+            hls.destroy()
+            video.pause()
+            video.removeAttribute("src")
+            try {
+              video.load()
+            } catch {
+              // Ignore browsers that complain while clearing the detached media element.
+            }
+          }
+        })
+        .catch((error: unknown) => {
+          if (cancelled) {
+            return
+          }
+
+          const context = loadIssueContextRef.current
+          reportVideoLoadIssue({
+            distanceToViewport: context.distanceToViewport,
+            error,
+            isActive: context.isActive,
+            isInViewport: context.isInViewport,
+            isMuted: context.isMuted,
+            isVisible: context.isVisible,
+            lastReportedIssueRef: lastReportedLoadIssueRef,
+            src: resolvedSrc,
+            stage: context.isVisible
+              ? "viewport"
+              : context.isInViewport
+                ? "near-viewport"
+                : "prewarm",
+          })
+        })
+    }
+
+    return () => {
+      cancelled = true
+      setHasConnectedPlaybackSource(false)
+      sourceCleanupRef.current?.()
+      sourceCleanupRef.current = null
+    }
+  }, [
+    hasAttachedSource,
+    lastReportedLoadIssueRef,
+    resolvedSrc,
+    shouldRenderVideoSource,
+  ])
 
   useEffect(() => {
     const video = videoRef.current
     if (
       !video ||
       !hasVideoSource ||
+      !hasConnectedPlaybackSource ||
       !shouldMountVideo ||
       !hasAttachedSource ||
       hasIssuedLoadHintRef.current
@@ -164,6 +323,10 @@ export function AutoPlayVideo({
     // Nudge the browser to start fetching bytes for offscreen preload candidates. This is
     // intentionally fire-once per source to avoid churn while scrolling.
     if (!canUseAutoPreload && !isNearViewport) {
+      return
+    }
+
+    if (!isDirectVideoFileSource(resolvedSrc)) {
       return
     }
 
@@ -184,9 +347,10 @@ export function AutoPlayVideo({
   }, [
     canUseAutoPreload,
     hasAttachedSource,
+    hasConnectedPlaybackSource,
     hasVideoSource,
     isNearViewport,
-    normalizedSrc,
+    resolvedSrc,
     shouldMountVideo,
   ])
 
@@ -228,7 +392,7 @@ export function AutoPlayVideo({
       }
     }
 
-    if (!playbackDecision.shouldPlay || !video.paused) {
+    if (!hasConnectedPlaybackSource || !playbackDecision.shouldPlay || !video.paused) {
       return
     }
 
@@ -274,7 +438,7 @@ export function AutoPlayVideo({
         isMuted,
         isVisible,
         lastReportedIssueRef: lastReportedPlayIssueRef,
-        src: normalizedSrc,
+        src: resolvedSrc,
       })
     })
   }, [
@@ -287,8 +451,9 @@ export function AutoPlayVideo({
     isPlaybackOwner,
     isVisible,
     lastReportedPlayIssueRef,
-    normalizedSrc,
+    resolvedSrc,
     queueFrameReady,
+    hasConnectedPlaybackSource,
     shouldRenderVideoSource,
   ])
 
@@ -327,13 +492,12 @@ export function AutoPlayVideo({
           playsInline
           poster={resolvedPoster}
           preload={
-            shouldRenderVideoSource
+            shouldRenderVideoSource && hasConnectedPlaybackSource
               ? canUseAutoPreload || isInViewport || isNearViewport || isVisible
                 ? "auto"
                 : "metadata"
               : "none"
           }
-          src={shouldRenderVideoSource ? normalizedSrc : undefined}
         />
       )}
     </div>

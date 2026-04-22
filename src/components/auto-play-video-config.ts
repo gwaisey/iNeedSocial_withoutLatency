@@ -12,6 +12,11 @@ export const VIDEO_REVEAL_PLAYBACK_PROGRESS_S = 0.03
 
 const learnedVideoAspectRatios = new Map<string, string>()
 
+function getCloudflareStreamCustomerCode() {
+  const customerCode = import.meta.env.VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE?.trim()
+  return customerCode ? customerCode : undefined
+}
+
 function buildAspectRatio(width: number, height: number) {
   if (width <= 0 || height <= 0) {
     return undefined
@@ -25,24 +30,80 @@ export function getNormalizedVideoSource(src?: string) {
   return normalizedSrc ? normalizedSrc : undefined
 }
 
-export function getVideoPosterSource(src?: string, poster?: string) {
-  if (poster) {
-    return poster
-  }
+export function isDirectVideoFileSource(src?: string) {
+  return /\.mp4($|\?)/i.test(src ?? "")
+}
 
-  if (!src?.includes("/content/videos/") || !src.endsWith(".mp4")) {
+function getLocalVideoPosterSource(src?: string) {
+  if (!src?.includes("/content/videos/") || !isDirectVideoFileSource(src)) {
     return undefined
   }
 
   return src.replace("/content/videos/", "/content/video-posters/").replace(/\.mp4$/, ".jpg")
 }
 
-export function getKnownVideoPosterDimensions(src?: string, poster?: string) {
-  const posterSrc = getVideoPosterSource(src, poster)
-  return posterSrc ? KNOWN_VIDEO_POSTER_DIMENSIONS[posterSrc] : undefined
+export function getCloudflareStreamManifestUrl(
+  streamUid?: string,
+  customerCode = getCloudflareStreamCustomerCode()
+) {
+  const normalizedStreamUid = streamUid?.trim()
+  if (!normalizedStreamUid || !customerCode) {
+    return undefined
+  }
+
+  return `https://customer-${customerCode}.cloudflarestream.com/${normalizedStreamUid}/manifest/video.m3u8`
 }
 
-export function getKnownVideoAspectRatio(src?: string, poster?: string) {
+export function getCloudflareStreamThumbnailUrl(
+  streamUid?: string,
+  customerCode = getCloudflareStreamCustomerCode()
+) {
+  const normalizedStreamUid = streamUid?.trim()
+  if (!normalizedStreamUid || !customerCode) {
+    return undefined
+  }
+
+  return `https://customer-${customerCode}.cloudflarestream.com/${normalizedStreamUid}/thumbnails/thumbnail.jpg`
+}
+
+export function getResolvedVideoSource(src?: string, streamUid?: string) {
+  return getCloudflareStreamManifestUrl(streamUid) ?? getNormalizedVideoSource(src)
+}
+
+export function getVideoPosterSource(src?: string, poster?: string, streamUid?: string) {
+  if (poster) {
+    return poster
+  }
+
+  const streamPoster = getCloudflareStreamThumbnailUrl(streamUid)
+  if (streamPoster) {
+    return streamPoster
+  }
+
+  return getLocalVideoPosterSource(src)
+}
+
+export function getKnownVideoPosterDimensions(src?: string, poster?: string, streamUid?: string) {
+  const posterSources = [
+    getVideoPosterSource(src, poster, streamUid),
+    getLocalVideoPosterSource(src),
+  ]
+
+  for (const posterSrc of posterSources) {
+    if (!posterSrc) {
+      continue
+    }
+
+    const dimensions = KNOWN_VIDEO_POSTER_DIMENSIONS[posterSrc]
+    if (dimensions) {
+      return dimensions
+    }
+  }
+
+  return undefined
+}
+
+export function getKnownVideoAspectRatio(src?: string, poster?: string, streamUid?: string) {
   if (!src) {
     return undefined
   }
@@ -52,7 +113,7 @@ export function getKnownVideoAspectRatio(src?: string, poster?: string) {
     return learnedAspectRatio
   }
 
-  const dimensions = getKnownVideoPosterDimensions(src, poster)
+  const dimensions = getKnownVideoPosterDimensions(src, poster, streamUid)
   return dimensions ? buildAspectRatio(dimensions.width, dimensions.height) : undefined
 }
 

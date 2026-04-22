@@ -10,6 +10,7 @@ type FeedPayload = {
       alt: string
       poster?: string
       src: string
+      streamUid?: string
     }>
   }>
 }

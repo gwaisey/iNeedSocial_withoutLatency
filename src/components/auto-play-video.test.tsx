@@ -2,6 +2,24 @@ import { fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AutoPlayVideo } from "./auto-play-video"
 
+const hlsAttachMediaSpy = vi.fn()
+const hlsLoadSourceSpy = vi.fn()
+const hlsDestroySpy = vi.fn()
+
+vi.mock("hls.js", () => {
+  class MockHls {
+    static isSupported = vi.fn(() => true)
+
+    attachMedia = hlsAttachMediaSpy
+    destroy = hlsDestroySpy
+    loadSource = hlsLoadSourceSpy
+  }
+
+  return {
+    default: MockHls,
+  }
+})
+
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root = null
   readonly rootMargin: string
@@ -72,6 +90,7 @@ describe("AutoPlayVideo", () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     window.IntersectionObserver = originalIntersectionObserver
     HTMLMediaElement.prototype.play = originalPlay
     HTMLMediaElement.prototype.pause = originalPause
@@ -98,6 +117,9 @@ describe("AutoPlayVideo", () => {
     }
 
     vi.restoreAllMocks()
+    hlsAttachMediaSpy.mockReset()
+    hlsDestroySpy.mockReset()
+    hlsLoadSourceSpy.mockReset()
   })
 
   it("does not render a video element when src is missing", () => {
@@ -234,5 +256,27 @@ describe("AutoPlayVideo", () => {
     fireEvent.loadedMetadata(video)
 
     expect(shell.style.aspectRatio).toBe("540 / 300")
+  })
+
+  it("uses hls.js for Cloudflare Stream manifests when native HLS is unavailable", async () => {
+    vi.stubEnv("VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE", "mjiwvs3h8hhcy2t8")
+    vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("")
+
+    const { container } = render(
+      <AutoPlayVideo
+        className="video"
+        isMuted={true}
+        src="/content/videos/pinata.mp4"
+        streamUid="dad0deb02906401e5950bfe6816fb4a4"
+      />
+    )
+
+    await waitFor(() => {
+      expect(hlsLoadSourceSpy).toHaveBeenCalledWith(
+        "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/manifest/video.m3u8"
+      )
+    })
+
+    expect(hlsAttachMediaSpy).toHaveBeenCalledWith(container.querySelector("video"))
   })
 })

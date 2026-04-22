@@ -70,6 +70,7 @@ Salin `.env.example` menjadi `.env` untuk pengembangan lokal. Untuk deployment p
 
 ```bash
 VITE_FEED_SOURCE=mock
+VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE=
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
@@ -80,6 +81,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 - `api` untuk memanggil `/api/feed?theme=...` sebagai kontrak integrasi future-proof
 
 Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`. Route `/api/feed` tidak disediakan di repo ini, sehingga mode `api` tetap membutuhkan backend eksternal.
+
+`VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE` bersifat opsional. Jika diisi, media video yang memiliki `streamUid` di feed akan diputar dari Cloudflare Stream dengan fallback ke MP4 lokal bila kode customer tidak tersedia.
 
 Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Status penyimpanan sesi akan tetap ditampilkan secara non-blocking di halaman terima kasih.
 

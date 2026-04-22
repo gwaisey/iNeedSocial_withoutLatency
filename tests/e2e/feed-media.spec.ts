@@ -230,8 +230,12 @@ test("autoplay failures are buffered locally without crashing the feed", async (
     const originalPlay = HTMLMediaElement.prototype.play
 
     HTMLMediaElement.prototype.play = function () {
-      const source = (this as HTMLMediaElement).currentSrc || this.getAttribute("src") || ""
-      if (source.includes("pinata.mp4")) {
+      const ownerPostId =
+        (this as HTMLMediaElement)
+          .closest?.("[data-regular-post-id]")
+          ?.getAttribute("data-regular-post-id") ?? ""
+
+      if (ownerPostId === "post-video-sample") {
         return Promise.reject(new DOMException("autoplay blocked", "NotAllowedError"))
       }
 
