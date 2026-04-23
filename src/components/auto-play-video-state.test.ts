@@ -7,6 +7,7 @@ import {
   shouldEarlyLoadNearViewport,
   shouldEnsureViewportData,
   shouldForceAutoPreload,
+  shouldPromoteForwardPlaybackHandoff,
 } from "./auto-play-video-state"
 
 describe("auto-play video state", () => {
@@ -274,6 +275,48 @@ describe("auto-play video state", () => {
         hasLoadedFrame: false,
         isActive: true,
         readyState: 0,
+      })
+    ).toBe(false)
+  })
+
+  it("promotes the next partially visible video only during downward scroll handoff", () => {
+    expect(
+      shouldPromoteForwardPlaybackHandoff({
+        isInViewport: true,
+        rootTop: 0,
+        scrollDirection: "down",
+        targetTop: 620,
+        visibleFraction: 0.18,
+      })
+    ).toBe(true)
+
+    expect(
+      shouldPromoteForwardPlaybackHandoff({
+        isInViewport: true,
+        rootTop: 0,
+        scrollDirection: "down",
+        targetTop: 620,
+        visibleFraction: 0.1,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldPromoteForwardPlaybackHandoff({
+        isInViewport: true,
+        rootTop: 0,
+        scrollDirection: "up",
+        targetTop: 620,
+        visibleFraction: 0.4,
+      })
+    ).toBe(false)
+
+    expect(
+      shouldPromoteForwardPlaybackHandoff({
+        isInViewport: true,
+        rootTop: 0,
+        scrollDirection: "down",
+        targetTop: -120,
+        visibleFraction: 0.4,
       })
     ).toBe(false)
   })

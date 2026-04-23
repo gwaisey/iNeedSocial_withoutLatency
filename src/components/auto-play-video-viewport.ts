@@ -4,12 +4,18 @@ import {
   VIDEO_EARLY_LOAD_DISTANCE_PX,
   VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS,
 } from "./auto-play-video-config"
-import { deriveVideoViewportState, getViewportBounds } from "./auto-play-video-state"
+import {
+  deriveVideoViewportState,
+  getViewportBounds,
+  shouldPromoteForwardPlaybackHandoff,
+  type VideoScrollDirection,
+} from "./auto-play-video-state"
 
 type ViewportSubscriber = () => void
 
 type VideoViewportState = {
   readonly distanceToViewport: number
+  readonly isForwardHandoffCandidate: boolean
   readonly isInViewport: boolean
   readonly isVisible: boolean
   readonly playbackPriority: number
@@ -19,6 +25,7 @@ type VideoViewportState = {
 
 const INITIAL_VIDEO_VIEWPORT_STATE: VideoViewportState = {
   distanceToViewport: Number.POSITIVE_INFINITY,
+  isForwardHandoffCandidate: false,
   isInViewport: false,
   isVisible: false,
   playbackPriority: Number.POSITIVE_INFINITY,
@@ -41,6 +48,14 @@ function getViewportPreloadDirection(
   }
 
   return "visible"
+}
+
+function getRootScrollOffset(root: HTMLElement | null) {
+  if (root) {
+    return root.scrollTop
+  }
+
+  return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
 }
 
 const viewportSubscribers = new Set<ViewportSubscriber>()
@@ -98,6 +113,8 @@ export function useMountedVideoViewportState({
   readonly shouldMountVideo: boolean
 }) {
   const wasVisibleRef = useRef(false)
+  const lastScrollOffsetRef = useRef<number | null>(null)
+  const scrollDirectionRef = useRef<VideoScrollDirection>("none")
   const [viewportState, setViewportState] = useState(INITIAL_VIDEO_VIEWPORT_STATE)
 
   useEffect(() => {
@@ -106,6 +123,8 @@ export function useMountedVideoViewportState({
     }
 
     wasVisibleRef.current = false
+    lastScrollOffsetRef.current = null
+    scrollDirectionRef.current = "none"
     setViewportState(INITIAL_VIDEO_VIEWPORT_STATE)
   }, [hasVideoSource, shouldMountVideo])
 
@@ -122,6 +141,8 @@ export function useMountedVideoViewportState({
     const updateViewportState = () => {
       const root = scrollRootRef?.current ?? null
       const { top: rootTop, bottom: rootBottom } = getViewportBounds(root)
+      const scrollOffset = getRootScrollOffset(root)
+      const previousScrollOffset = lastScrollOffsetRef.current
       const shellRect = shell.getBoundingClientRect()
       const nextViewportState = deriveVideoViewportState({
         rootBottom,
@@ -131,9 +152,25 @@ export function useMountedVideoViewportState({
         wasVisible: wasVisibleRef.current,
       })
 
+      if (previousScrollOffset !== null) {
+        if (scrollOffset > previousScrollOffset + 1) {
+          scrollDirectionRef.current = "down"
+        } else if (scrollOffset < previousScrollOffset - 1) {
+          scrollDirectionRef.current = "up"
+        }
+      }
+
+      lastScrollOffsetRef.current = scrollOffset
       wasVisibleRef.current = nextViewportState.isVisible
       setViewportState({
         distanceToViewport: nextViewportState.distanceToViewport,
+        isForwardHandoffCandidate: shouldPromoteForwardPlaybackHandoff({
+          isInViewport: nextViewportState.isInViewport,
+          rootTop,
+          scrollDirection: scrollDirectionRef.current,
+          targetTop: shellRect.top,
+          visibleFraction: nextViewportState.visibleFraction,
+        }),
         isInViewport: nextViewportState.isInViewport,
         isVisible: nextViewportState.isVisible,
         playbackPriority: nextViewportState.centerOffset,

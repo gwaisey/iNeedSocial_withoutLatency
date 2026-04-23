@@ -97,6 +97,7 @@ export function AutoPlayVideo({
   const [shouldMountVideo, setShouldMountVideo] = useState(false)
   const {
     distanceToViewport,
+    isForwardHandoffCandidate,
     isInViewport,
     isNearViewport,
     isVisible,
@@ -127,6 +128,7 @@ export function AutoPlayVideo({
     shouldMountVideo,
     videoRef,
   })
+  const isPlaybackVisible = isVisible || isForwardHandoffCandidate
 
   useEffect(() => {
     loadIssueContextRef.current = {
@@ -143,7 +145,7 @@ export function AutoPlayVideo({
     distanceToViewport,
     hasVideoSource,
     isActive,
-    isVisible,
+    isVisible: isPlaybackVisible,
     playbackCandidateId,
     playbackPriority,
     playbackVisibilityScore: visibleFraction,
@@ -192,7 +194,6 @@ export function AutoPlayVideo({
     preloadDirection === "below" &&
     !isInViewport &&
     distanceToViewport <= VIDEO_EARLY_LOAD_DISTANCE_PX
-
   useCloudflareStreamWarmup({
     deepPrebuffer: shouldDeepPrebufferCloudflareStream,
     enabled: shouldWarmCloudflareStream,
@@ -475,7 +476,7 @@ export function AutoPlayVideo({
       isInViewport,
       isPlaybackOwner,
       isPaused: video.paused,
-      isVisible,
+      isVisible: isPlaybackVisible,
     })
 
     if (playbackDecision.shouldPause) {
@@ -545,6 +546,7 @@ export function AutoPlayVideo({
     hasLoadedFrame,
     hasVideoSource,
     isActive,
+    isForwardHandoffCandidate,
     isInViewport,
     isMuted,
     isPlaybackOwner,
@@ -555,6 +557,7 @@ export function AutoPlayVideo({
     hasConnectedPlaybackSource,
     shouldRenderVideoSource,
     hasAttachedSource,
+    isPlaybackVisible,
   ])
 
   return (

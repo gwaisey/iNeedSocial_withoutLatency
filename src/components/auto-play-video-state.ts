@@ -1,5 +1,6 @@
 import {
   VIDEO_EARLY_LOAD_DISTANCE_PX,
+  VIDEO_PLAY_HANDOFF_VISIBLE_RATIO,
   VIDEO_PLAY_START_VISIBLE_RATIO,
   VIDEO_PLAY_STOP_VISIBLE_RATIO,
   VIDEO_READY_STATE_CURRENT_DATA,
@@ -20,6 +21,8 @@ export type VideoPlaybackDecision = {
   readonly shouldPlay: boolean
   readonly shouldReset: boolean
 }
+
+export type VideoScrollDirection = "down" | "none" | "up"
 
 export function getDistanceToViewport(
   rootTop: number,
@@ -250,6 +253,27 @@ export function shouldEarlyLoadNearViewport({
     Number.isFinite(distanceToViewport) &&
     distanceToViewport <= VIDEO_EARLY_LOAD_DISTANCE_PX &&
     readyState < VIDEO_READY_STATE_CURRENT_DATA
+  )
+}
+
+export function shouldPromoteForwardPlaybackHandoff({
+  isInViewport,
+  rootTop,
+  scrollDirection,
+  targetTop,
+  visibleFraction,
+}: {
+  readonly isInViewport: boolean
+  readonly rootTop: number
+  readonly scrollDirection: VideoScrollDirection
+  readonly targetTop: number
+  readonly visibleFraction: number
+}) {
+  return (
+    scrollDirection === "down" &&
+    isInViewport &&
+    targetTop >= rootTop &&
+    visibleFraction >= VIDEO_PLAY_HANDOFF_VISIBLE_RATIO
   )
 }
 
