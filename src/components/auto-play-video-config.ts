@@ -1,6 +1,6 @@
 import { KNOWN_VIDEO_POSTER_DIMENSIONS } from "./auto-play-video-poster-dimensions"
 
-export const VIDEO_PRELOAD_ROOT_MARGIN = "7200px 0px"
+export const VIDEO_PRELOAD_ROOT_MARGIN = "12000px 0px"
 export const VIDEO_PLAY_START_VISIBLE_RATIO = 0.35
 export const VIDEO_PLAY_STOP_VISIBLE_RATIO = 0.35
 export const VIDEO_PLAY_HANDOFF_VISIBLE_RATIO = 0.15
@@ -103,7 +103,7 @@ export function getCloudflareStreamThumbnailUrl(
 export function getResolvedVideoSource(
   src?: string,
   streamUid?: string,
-  streamDelivery: "hls" | "mp4" = "hls"
+  streamDelivery: "hls" | "mp4" = "mp4"
 ) {
   if (streamDelivery === "mp4") {
     return getCloudflareStreamDownloadUrl(streamUid) ?? getNormalizedVideoSource(src)

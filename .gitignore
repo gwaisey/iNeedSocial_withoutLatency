@@ -11,3 +11,4 @@ vite-e2e.out.log
 vite-e2e.err.log
 test-results/
 playwright-report/
+tmp/

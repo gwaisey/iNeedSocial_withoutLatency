@@ -35,9 +35,6 @@ describe("auto-play video config", () => {
       "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/downloads/default.mp4"
     )
     expect(getCloudflareStreamOrigin()).toBe("https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com")
-    expect(getResolvedVideoSource("/content/videos/pinata.mp4", "dad0deb02906401e5950bfe6816fb4a4")).toBe(
-      "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/manifest/video.m3u8"
-    )
     expect(
       getResolvedVideoSource(
         "/content/videos/pinata.mp4",
@@ -46,6 +43,15 @@ describe("auto-play video config", () => {
       )
     ).toBe(
       "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/downloads/default.mp4"
+    )
+    expect(
+      getResolvedVideoSource(
+        "/content/videos/pinata.mp4",
+        "dad0deb02906401e5950bfe6816fb4a4",
+        "hls"
+      )
+    ).toBe(
+      "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/manifest/video.m3u8"
     )
     expect(
       getVideoPosterSource("/content/videos/pinata.mp4", undefined, "dad0deb02906401e5950bfe6816fb4a4")
