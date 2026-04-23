@@ -23,6 +23,7 @@ describe("video preload budget", () => {
     connectCandidate("video-c")
     connectCandidate("video-d")
     connectCandidate("video-e")
+    connectCandidate("video-f")
 
     updateVideoPreloadCandidate("video-a", {
       canPrewarm: true,
@@ -49,12 +50,18 @@ describe("video preload budget", () => {
       distancePx: 1_280,
       direction: "below",
     })
+    updateVideoPreloadCandidate("video-f", {
+      canPrewarm: true,
+      distancePx: 1_640,
+      direction: "below",
+    })
 
     expect(notifications.get("video-a")).toBeNull()
     expect(notifications.get("video-b")).toBe(0)
     expect(notifications.get("video-c")).toBeNull()
     expect(notifications.get("video-d")).toBe(1)
     expect(notifications.get("video-e")).toBe(2)
+    expect(notifications.get("video-f")).toBe(3)
 
     unregisterVideoPreloadCandidate("video-a")
 
@@ -62,6 +69,7 @@ describe("video preload budget", () => {
     expect(notifications.get("video-c")).toBeNull()
     expect(notifications.get("video-d")).toBe(1)
     expect(notifications.get("video-e")).toBe(2)
+    expect(notifications.get("video-f")).toBe(3)
   })
 
   it("does not count visible candidates toward the forward preload budget", () => {
@@ -81,6 +89,8 @@ describe("video preload budget", () => {
     connectCandidate("visible-d")
     connectCandidate("up-next-a")
     connectCandidate("up-next-b")
+    connectCandidate("up-next-c")
+    connectCandidate("up-next-d")
     connectCandidate("above-nearby")
 
     updateVideoPreloadCandidate("visible-a", {
@@ -113,6 +123,16 @@ describe("video preload budget", () => {
       distancePx: 4_400,
       direction: "below",
     })
+    updateVideoPreloadCandidate("up-next-c", {
+      canPrewarm: true,
+      distancePx: 5_800,
+      direction: "below",
+    })
+    updateVideoPreloadCandidate("up-next-d", {
+      canPrewarm: true,
+      distancePx: 7_400,
+      direction: "below",
+    })
     updateVideoPreloadCandidate("above-nearby", {
       canPrewarm: true,
       distancePx: 40,
@@ -125,6 +145,8 @@ describe("video preload budget", () => {
     expect(notifications.get("visible-d")).toBeNull()
     expect(notifications.get("up-next-a")).toBe(0)
     expect(notifications.get("up-next-b")).toBe(1)
+    expect(notifications.get("up-next-c")).toBe(2)
+    expect(notifications.get("up-next-d")).toBeNull()
     expect(notifications.get("above-nearby")).toBeNull()
   })
 
@@ -180,7 +202,7 @@ describe("video preload budget", () => {
     })
     updateVideoPreloadCandidate("far", {
       canPrewarm: true,
-      distancePx: 6_000,
+      distancePx: 7_600,
       direction: "below",
     })
 

@@ -143,15 +143,15 @@ describe("AutoPlayVideo", () => {
 
   it("mounts the shell without attaching a real src while the video stays offscreen and out of the preload pool", async () => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      bottom: 7_600,
+      bottom: 10_600,
       height: 600,
       left: 0,
       right: 360,
       toJSON: () => ({}),
-      top: 7_000,
+      top: 10_000,
       width: 360,
       x: 0,
-      y: 7_000,
+      y: 10_000,
     } as DOMRect)
 
     const { container } = render(

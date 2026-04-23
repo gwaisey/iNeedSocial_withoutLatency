@@ -261,12 +261,21 @@ describe("auto-play video state", () => {
 
     expect(
       shouldEarlyLoadNearViewport({
-        distanceToViewport: 1_600,
+        distanceToViewport: 3_400,
         hasLoadedFrame: false,
         isActive: true,
         readyState: 0,
       })
     ).toBe(true)
+
+    expect(
+      shouldEarlyLoadNearViewport({
+        distanceToViewport: 3_800,
+        hasLoadedFrame: false,
+        isActive: true,
+        readyState: 0,
+      })
+    ).toBe(false)
   })
 
   it("builds aspect ratios only from valid intrinsic sizes", () => {
