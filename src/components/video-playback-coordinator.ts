@@ -15,8 +15,8 @@ function recomputePlaybackOwner() {
       })
       .sort((left, right) => {
         return (
-          right[1].visibilityScore - left[1].visibilityScore ||
           left[1].priority - right[1].priority ||
+          right[1].visibilityScore - left[1].visibilityScore ||
           left[0].localeCompare(right[0])
         )
       })[0]?.[0] ?? null

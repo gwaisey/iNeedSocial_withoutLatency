@@ -117,12 +117,17 @@ export function getVideoPosterSource(src?: string, poster?: string, streamUid?: 
     return poster
   }
 
+  const localPoster = getLocalVideoPosterSource(src)
+  if (localPoster) {
+    return localPoster
+  }
+
   const streamPoster = getCloudflareStreamThumbnailUrl(streamUid)
   if (streamPoster) {
     return streamPoster
   }
 
-  return getLocalVideoPosterSource(src)
+  return undefined
 }
 
 export function getKnownVideoPosterDimensions(src?: string, poster?: string, streamUid?: string) {

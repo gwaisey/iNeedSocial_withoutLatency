@@ -56,7 +56,7 @@ describe("auto-play video config", () => {
     expect(
       getVideoPosterSource("/content/videos/pinata.mp4", undefined, "dad0deb02906401e5950bfe6816fb4a4")
     ).toBe(
-      "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/thumbnails/thumbnail.jpg"
+      "/content/video-posters/pinata.jpg"
     )
     expect(getResolvedVideoSource("/content/videos/pinata.mp4")).toBe("/content/videos/pinata.mp4")
   })

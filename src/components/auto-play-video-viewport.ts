@@ -162,15 +162,16 @@ export function useMountedVideoViewportState({
 
       lastScrollOffsetRef.current = scrollOffset
       wasVisibleRef.current = nextViewportState.isVisible
+      const isForwardHandoffCandidate = shouldPromoteForwardPlaybackHandoff({
+        isInViewport: nextViewportState.isInViewport,
+        rootTop,
+        scrollDirection: scrollDirectionRef.current,
+        targetTop: shellRect.top,
+        visibleFraction: nextViewportState.visibleFraction,
+      })
       setViewportState({
         distanceToViewport: nextViewportState.distanceToViewport,
-        isForwardHandoffCandidate: shouldPromoteForwardPlaybackHandoff({
-          isInViewport: nextViewportState.isInViewport,
-          rootTop,
-          scrollDirection: scrollDirectionRef.current,
-          targetTop: shellRect.top,
-          visibleFraction: nextViewportState.visibleFraction,
-        }),
+        isForwardHandoffCandidate,
         isInViewport: nextViewportState.isInViewport,
         isVisible: nextViewportState.isVisible,
         playbackPriority: nextViewportState.centerOffset,

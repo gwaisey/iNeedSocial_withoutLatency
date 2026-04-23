@@ -68,7 +68,7 @@ describe("video playback coordinator", () => {
     expect(ownerB).toHaveBeenLastCalledWith(true)
   })
 
-  it("prefers the most visible eligible video before center proximity", () => {
+  it("prefers the most centered eligible video before the most visible one", () => {
     resetVideoPlaybackCoordinatorForTests()
 
     const ownerA = vi.fn()
@@ -88,7 +88,7 @@ describe("video playback coordinator", () => {
       visibilityScore: 0.82,
     })
 
-    expect(ownerA).toHaveBeenLastCalledWith(false)
-    expect(ownerB).toHaveBeenLastCalledWith(true)
+    expect(ownerA).toHaveBeenLastCalledWith(true)
+    expect(ownerB).toHaveBeenLastCalledWith(false)
   })
 })

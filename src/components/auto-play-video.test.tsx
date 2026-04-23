@@ -366,6 +366,7 @@ describe("AutoPlayVideo", () => {
     expect(
       document.head.querySelector('link[rel="preconnect"][data-direct-video-warmup="true"]')
     ).not.toBeNull()
+
     expect(document.head.querySelector('link[rel="preload"][as="video"]')).toBeNull()
     expect(fetchSpy).not.toHaveBeenCalled()
 
