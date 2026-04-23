@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AutoPlayVideo } from "./auto-play-video"
 import { resetCloudflareStreamWarmupState } from "./auto-play-video-stream-warmup"
@@ -93,6 +93,7 @@ describe("AutoPlayVideo", () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllEnvs()
     window.IntersectionObserver = originalIntersectionObserver
     HTMLMediaElement.prototype.play = originalPlay
@@ -375,5 +376,84 @@ describe("AutoPlayVideo", () => {
         "/content/videos/pinata.mp4"
       )
     })
+  })
+
+  it("keeps an offscreen source attached briefly before unloading it", async () => {
+    HTMLMediaElement.prototype.play = vi.fn(() => new Promise<void>(() => {}))
+
+    let rect = {
+      bottom: 854,
+      height: 854,
+      left: 0,
+      right: 480,
+      toJSON: () => ({}),
+      top: 0,
+      width: 480,
+      x: 0,
+      y: 0,
+    } as DOMRect
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => rect)
+    const animationFrameCallbacks: FrameRequestCallback[] = []
+    const flushAnimationFrames = () => {
+      const callbacks = animationFrameCallbacks.splice(0)
+      callbacks.forEach((callback) => callback(0))
+    }
+
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback)
+      return animationFrameCallbacks.length
+    })
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {})
+
+    const { container } = render(
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector("video")?.getAttribute("src")).toBe(
+        "/content/videos/pinata.mp4"
+      )
+    })
+
+    vi.useFakeTimers()
+
+    rect = {
+      bottom: -1_200,
+      height: 600,
+      left: 0,
+      right: 480,
+      toJSON: () => ({}),
+      top: -1_800,
+      width: 480,
+      x: 0,
+      y: -1_800,
+    } as DOMRect
+
+    fireEvent.scroll(document)
+
+    await act(async () => {
+      flushAnimationFrames()
+    })
+
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(
+      "/content/videos/pinata.mp4"
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(1_999)
+    })
+
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(
+      "/content/videos/pinata.mp4"
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+
+    expect(container.querySelector("video")?.getAttribute("src")).toBeNull()
+
+    vi.useRealTimers()
   })
 })

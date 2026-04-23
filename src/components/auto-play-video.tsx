@@ -1,10 +1,19 @@
-import { useEffect, useId, useRef, useState, type RefObject, type SyntheticEvent } from "react"
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+  type SyntheticEvent,
+} from "react"
 import {
   getResolvedVideoSource,
   getVideoPosterSource,
   isHlsManifestSource,
   isDirectVideoFileSource,
   VIDEO_EARLY_LOAD_DISTANCE_PX,
+  VIDEO_SOURCE_DETACH_GRACE_MS,
+  VIDEO_SOURCE_IMMEDIATE_DETACH_DISTANCE_PX,
 } from "./auto-play-video-config"
 import {
   classifyVideoPlayError,
@@ -78,6 +87,7 @@ export function AutoPlayVideo({
     isVisible: false,
   })
   const sourceCleanupRef = useRef<(() => void) | null>(null)
+  const detachSourceTimeoutRef = useRef<number | null>(null)
   const hasPendingPlayAttemptRef = useRef(false)
   const hasIssuedLoadHintRef = useRef(false)
   const [autoPreloadRank, setAutoPreloadRank] = useState<number | null>(null)
@@ -201,23 +211,74 @@ export function AutoPlayVideo({
       return
     }
 
+    if (detachSourceTimeoutRef.current !== null) {
+      window.clearTimeout(detachSourceTimeoutRef.current)
+      detachSourceTimeoutRef.current = null
+    }
     setHasAttachedSource(true)
   }, [hasAttachedSource, shouldRenderVideoSource])
 
   useEffect(() => {
-    if (shouldRenderVideoSource || !hasAttachedSource) {
+    const clearScheduledSourceDetach = () => {
+      if (detachSourceTimeoutRef.current === null) {
+        return
+      }
+
+      window.clearTimeout(detachSourceTimeoutRef.current)
+      detachSourceTimeoutRef.current = null
+    }
+
+    const detachPlaybackSource = () => {
+      clearScheduledSourceDetach()
+      hasPendingPlayAttemptRef.current = false
+      hasIssuedLoadHintRef.current = false
+      sourceCleanupRef.current?.()
+      sourceCleanupRef.current = null
+      setHasConnectedPlaybackSource(false)
+      setHasAttachedSource(false)
+    }
+
+    if (shouldRenderVideoSource) {
+      clearScheduledSourceDetach()
       return
     }
 
-    hasPendingPlayAttemptRef.current = false
-    hasIssuedLoadHintRef.current = false
-    sourceCleanupRef.current?.()
-    sourceCleanupRef.current = null
-    setHasConnectedPlaybackSource(false)
-    setHasAttachedSource(false)
-  }, [hasAttachedSource, shouldRenderVideoSource])
+    if (!hasAttachedSource) {
+      return
+    }
+
+    const shouldDetachImmediately =
+      !hasVideoSource ||
+      !shouldMountVideo ||
+      (Number.isFinite(distanceToViewport) &&
+        distanceToViewport >= VIDEO_SOURCE_IMMEDIATE_DETACH_DISTANCE_PX)
+
+    if (shouldDetachImmediately) {
+      detachPlaybackSource()
+      return
+    }
+
+    if (detachSourceTimeoutRef.current !== null) {
+      return
+    }
+
+    detachSourceTimeoutRef.current = window.setTimeout(() => {
+      detachSourceTimeoutRef.current = null
+      detachPlaybackSource()
+    }, VIDEO_SOURCE_DETACH_GRACE_MS)
+  }, [
+    distanceToViewport,
+    hasAttachedSource,
+    hasVideoSource,
+    shouldMountVideo,
+    shouldRenderVideoSource,
+  ])
 
   useEffect(() => {
+    if (detachSourceTimeoutRef.current !== null) {
+      window.clearTimeout(detachSourceTimeoutRef.current)
+      detachSourceTimeoutRef.current = null
+    }
     sourceCleanupRef.current?.()
     sourceCleanupRef.current = null
     setHasConnectedPlaybackSource(false)
@@ -229,6 +290,10 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     return () => {
+      if (detachSourceTimeoutRef.current !== null) {
+        window.clearTimeout(detachSourceTimeoutRef.current)
+        detachSourceTimeoutRef.current = null
+      }
       sourceCleanupRef.current?.()
       sourceCleanupRef.current = null
     }
@@ -236,7 +301,7 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !resolvedSrc || !hasAttachedSource || !shouldRenderVideoSource) {
+    if (!video || !resolvedSrc || !hasAttachedSource) {
       return
     }
 
@@ -339,7 +404,6 @@ export function AutoPlayVideo({
     hasAttachedSource,
     lastReportedLoadIssueRef,
     resolvedSrc,
-    shouldRenderVideoSource,
   ])
 
   useEffect(() => {
@@ -400,7 +464,7 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !shouldRenderVideoSource) {
+    if (!video || !hasAttachedSource) {
       return
     }
 
@@ -490,6 +554,7 @@ export function AutoPlayVideo({
     queueFrameReady,
     hasConnectedPlaybackSource,
     shouldRenderVideoSource,
+    hasAttachedSource,
   ])
 
   return (

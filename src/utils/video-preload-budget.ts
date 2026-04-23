@@ -10,7 +10,7 @@ type VideoPreloadCandidate = {
 
 // Keep auto-preloading focused on the next few videos so we buffer enough data
 // for instant playback once a video becomes visible, especially on real networks.
-const MAX_AUTO_PRELOAD_VIDEOS = 2
+const MAX_AUTO_PRELOAD_VIDEOS = 3
 const MAX_BELOW_PRELOAD_DISTANCE_PX = 5200
 const MAX_ABOVE_PRELOAD_DISTANCE_PX = 900
 const registry = new Map<string, VideoPreloadCandidate>()

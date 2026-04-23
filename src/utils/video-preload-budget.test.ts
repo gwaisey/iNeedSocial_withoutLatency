@@ -54,14 +54,14 @@ describe("video preload budget", () => {
     expect(notifications.get("video-b")).toBe(0)
     expect(notifications.get("video-c")).toBeNull()
     expect(notifications.get("video-d")).toBe(1)
-    expect(notifications.get("video-e")).toBeNull()
+    expect(notifications.get("video-e")).toBe(2)
 
     unregisterVideoPreloadCandidate("video-a")
 
     expect(notifications.get("video-b")).toBe(0)
     expect(notifications.get("video-c")).toBeNull()
     expect(notifications.get("video-d")).toBe(1)
-    expect(notifications.get("video-e")).toBeNull()
+    expect(notifications.get("video-e")).toBe(2)
   })
 
   it("does not count visible candidates toward the forward preload budget", () => {
