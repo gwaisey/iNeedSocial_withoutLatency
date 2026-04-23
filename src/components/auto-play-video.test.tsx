@@ -271,6 +271,17 @@ describe("AutoPlayVideo", () => {
   it("uses hls.js for Cloudflare Stream manifests when native HLS is unavailable", async () => {
     vi.stubEnv("VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE", "mjiwvs3h8hhcy2t8")
     vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("")
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 854,
+      height: 854,
+      left: 0,
+      right: 480,
+      toJSON: () => ({}),
+      top: 0,
+      width: 480,
+      x: 0,
+      y: 0,
+    } as DOMRect)
 
     const { container } = render(
       <AutoPlayVideo
@@ -327,5 +338,42 @@ describe("AutoPlayVideo", () => {
         'link[rel="preconnect"][href="https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com"]'
       )
     ).not.toBeNull()
+  })
+
+  it("preconnects and attaches the next direct MP4 candidate without duplicate preload fetches", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 2_236,
+      height: 836,
+      left: 0,
+      right: 360,
+      toJSON: () => ({}),
+      top: 1_400,
+      width: 360,
+      x: 0,
+      y: 1_400,
+    } as DOMRect)
+
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true } as Response)
+    globalThis.fetch = fetchSpy as typeof fetch
+
+    const { container } = render(
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+    )
+
+    expect(
+      document.head.querySelector('link[rel="preconnect"][data-direct-video-warmup="true"]')
+    ).not.toBeNull()
+    expect(document.head.querySelector('link[rel="preload"][as="video"]')).toBeNull()
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(container.querySelector("video")).not.toBeNull()
+    })
+
+    await waitFor(() => {
+      expect(container.querySelector("video")?.getAttribute("src")).toBe(
+        "/content/videos/pinata.mp4"
+      )
+    })
   })
 })

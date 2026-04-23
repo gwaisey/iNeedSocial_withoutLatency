@@ -14,16 +14,13 @@ import {
   useVideoPrewarmMount,
   useVideoSourceLifecycleReset,
 } from "./auto-play-video-lifecycle"
-import { useVideoPreloadLink } from "./auto-play-video-preload-link"
 import { syncVideoMutedState, useVideoReadinessState } from "./auto-play-video-readiness"
 import {
   preloadHlsRuntime,
   useCloudflareStreamWarmup,
+  useDirectVideoWarmup,
 } from "./auto-play-video-stream-warmup"
-import {
-  getVideoPlaybackDecision,
-  shouldAttachVideoSource,
-} from "./auto-play-video-state"
+import { getVideoPlaybackDecision } from "./auto-play-video-state"
 import { useMountedVideoViewportState } from "./auto-play-video-viewport"
 
 type AutoPlayVideoProps = {
@@ -113,6 +110,7 @@ export function AutoPlayVideo({
     shellAspectRatio,
   } = useVideoReadinessState({
     hasVideoSource,
+    isSourceConnected: hasConnectedPlaybackSource,
     normalizedSrc: resolvedSrc,
     onLoadedMetadata,
     posterSrc: resolvedPoster,
@@ -162,27 +160,19 @@ export function AutoPlayVideo({
   })
 
   const canUseAutoPreload = autoPreloadRank !== null
-
-  useVideoPreloadLink({
-    candidateId: preloadCandidateId,
-    enabled:
-      canUseAutoPreload &&
-      shouldMountVideo &&
-      hasAttachedSource &&
-      isDirectVideoFileSource(resolvedSrc),
-    href: resolvedSrc,
-  })
+  const shouldPreloadNearbyForwardSource = isNearViewport && preloadDirection === "below"
+  const shouldKeepAttachedSource =
+    hasAttachedSource &&
+    (isInViewport || isVisible || canUseAutoPreload || shouldPreloadNearbyForwardSource)
 
   const shouldRenderVideoSource =
     hasVideoSource &&
     shouldMountVideo &&
-    shouldAttachVideoSource({
-      canUseAutoPreload,
-      hasAttachedSource,
-      isInViewport,
-      isNearViewport,
-      isVisible,
-    })
+    (shouldKeepAttachedSource ||
+      canUseAutoPreload ||
+      isInViewport ||
+      isVisible ||
+      shouldPreloadNearbyForwardSource)
   const shouldWarmCloudflareStream =
     shouldMountVideo &&
     isHlsManifestSource(resolvedSrc) &&
@@ -198,6 +188,13 @@ export function AutoPlayVideo({
     enabled: shouldWarmCloudflareStream,
     manifestUrl: resolvedSrc,
   })
+  useDirectVideoWarmup({
+    enabled:
+      shouldMountVideo &&
+      isDirectVideoFileSource(resolvedSrc) &&
+      (canUseAutoPreload || isNearViewport || isInViewport || isVisible),
+    src: resolvedSrc,
+  })
 
   useEffect(() => {
     if (!shouldRenderVideoSource || hasAttachedSource) {
@@ -205,6 +202,19 @@ export function AutoPlayVideo({
     }
 
     setHasAttachedSource(true)
+  }, [hasAttachedSource, shouldRenderVideoSource])
+
+  useEffect(() => {
+    if (shouldRenderVideoSource || !hasAttachedSource) {
+      return
+    }
+
+    hasPendingPlayAttemptRef.current = false
+    hasIssuedLoadHintRef.current = false
+    sourceCleanupRef.current?.()
+    sourceCleanupRef.current = null
+    setHasConnectedPlaybackSource(false)
+    setHasAttachedSource(false)
   }, [hasAttachedSource, shouldRenderVideoSource])
 
   useEffect(() => {

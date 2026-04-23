@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { getCloudflareStreamOrigin } from "./auto-play-video-config"
 
 const STREAM_WARMUP_LINK_ATTR = "data-cloudflare-stream-warmup"
+const DIRECT_VIDEO_WARMUP_LINK_ATTR = "data-direct-video-warmup"
 const warmedStreamManifestRequests = new Map<string, Promise<Response>>()
 const warmedStreamTextRequests = new Map<string, Promise<string>>()
 const warmedStreamDeepPrebufferRequests = new Map<string, Promise<void>>()
@@ -146,10 +147,12 @@ function hasHeadLink(rel: string, href: string) {
 }
 
 function appendHeadLink({
+  attributeName = STREAM_WARMUP_LINK_ATTR,
   crossOrigin,
   href,
   rel,
 }: {
+  readonly attributeName?: string
   readonly crossOrigin?: "anonymous"
   readonly href: string
   readonly rel: "dns-prefetch" | "preconnect"
@@ -161,7 +164,7 @@ function appendHeadLink({
   const link = document.createElement("link")
   link.rel = rel
   link.href = href
-  link.setAttribute(STREAM_WARMUP_LINK_ATTR, "true")
+  link.setAttribute(attributeName, "true")
 
   if (crossOrigin) {
     link.crossOrigin = crossOrigin
@@ -170,17 +173,30 @@ function appendHeadLink({
   document.head.appendChild(link)
 }
 
-function ensureCloudflareStreamPreconnect(origin?: string) {
+function ensurePreconnect(origin: string | undefined, attributeName = STREAM_WARMUP_LINK_ATTR) {
   if (!origin) {
     return
   }
 
-  appendHeadLink({ href: origin, rel: "dns-prefetch" })
+  appendHeadLink({ attributeName, href: origin, rel: "dns-prefetch" })
   appendHeadLink({
+    attributeName,
     crossOrigin: "anonymous",
     href: origin,
     rel: "preconnect",
   })
+}
+
+function getUrlOrigin(url?: string) {
+  if (!url) {
+    return undefined
+  }
+
+  try {
+    return new URL(url, window.location.href).origin
+  } catch {
+    return undefined
+  }
 }
 
 export function preloadHlsRuntime() {
@@ -246,7 +262,7 @@ export function resetCloudflareStreamWarmupState() {
   }
 
   document.head
-    .querySelectorAll(`[${STREAM_WARMUP_LINK_ATTR}]`)
+    .querySelectorAll(`[${STREAM_WARMUP_LINK_ATTR}], [${DIRECT_VIDEO_WARMUP_LINK_ATTR}]`)
     .forEach((link) => link.remove())
 }
 
@@ -264,11 +280,27 @@ export function useCloudflareStreamWarmup({
       return
     }
 
-    ensureCloudflareStreamPreconnect(getCloudflareStreamOrigin())
+    ensurePreconnect(getCloudflareStreamOrigin())
     void preloadHlsRuntime().catch(() => {})
     void warmCloudflareStreamManifest(manifestUrl)?.catch(() => {})
     if (deepPrebuffer) {
       void deepPrebufferCloudflareStream(manifestUrl)?.catch(() => {})
     }
   }, [deepPrebuffer, enabled, manifestUrl])
+}
+
+export function useDirectVideoWarmup({
+  enabled,
+  src,
+}: {
+  readonly enabled: boolean
+  readonly src?: string
+}) {
+  useEffect(() => {
+    if (!enabled || !src) {
+      return
+    }
+
+    ensurePreconnect(getUrlOrigin(src), DIRECT_VIDEO_WARMUP_LINK_ATTR)
+  }, [enabled, src])
 }

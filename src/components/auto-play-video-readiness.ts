@@ -97,6 +97,7 @@ export function syncVideoMutedState(video: HTMLVideoElement, isMuted: boolean) {
 
 export function useVideoReadinessState({
   hasVideoSource,
+  isSourceConnected,
   normalizedSrc,
   onLoadedMetadata,
   posterSrc,
@@ -104,6 +105,7 @@ export function useVideoReadinessState({
   videoRef,
 }: {
   readonly hasVideoSource: boolean
+  readonly isSourceConnected: boolean
   readonly normalizedSrc?: string
   readonly onLoadedMetadata?: (event: SyntheticEvent<HTMLVideoElement>) => void
   readonly posterSrc?: string
@@ -134,6 +136,15 @@ export function useVideoReadinessState({
       getKnownVideoAspectRatio(normalizedSrc, posterSrc) ?? DEFAULT_VIDEO_ASPECT_RATIO
     )
   }, [normalizedSrc, posterSrc])
+
+  useEffect(() => {
+    if (isSourceConnected) {
+      return
+    }
+
+    clearQueuedVideoFrame(frameReadyCleanupRef, hasQueuedFrameReadyRef)
+    setHasLoadedFrame(false)
+  }, [isSourceConnected])
 
   useEffect(() => {
     const video = videoRef.current
