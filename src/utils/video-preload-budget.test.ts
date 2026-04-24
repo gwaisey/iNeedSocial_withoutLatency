@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest"
 import {
   registerVideoPreloadCandidate,
   resetVideoPreloadBudgetForTests,
+  setVideoPreloadScrollDirection,
   unregisterVideoPreloadCandidate,
   updateVideoPreloadCandidate,
 } from "./video-preload-budget"
 
 describe("video preload budget", () => {
-  it("preloads only the nearest forward videos and excludes above-viewport candidates while forward videos exist", () => {
+  it("preloads only the nearest downward videos while scrolling down", () => {
     resetVideoPreloadBudgetForTests()
 
     const notifications = new Map<string, number | null>()
@@ -70,6 +71,51 @@ describe("video preload budget", () => {
     expect(notifications.get("video-d")).toBe(1)
     expect(notifications.get("video-e")).toBe(2)
     expect(notifications.get("video-f")).toBeNull()
+  })
+
+  it("preloads above-viewport candidates first while scrolling up", () => {
+    resetVideoPreloadBudgetForTests()
+
+    const notifications = new Map<string, number | null>()
+
+    const connectCandidate = (candidateId: string) => {
+      registerVideoPreloadCandidate(candidateId, (preloadRank) => {
+        notifications.set(candidateId, preloadRank)
+      })
+    }
+
+    connectCandidate("below-nearby")
+    connectCandidate("above-nearby")
+    connectCandidate("above-secondary")
+    connectCandidate("above-far")
+
+    updateVideoPreloadCandidate("below-nearby", {
+      canPrewarm: true,
+      distancePx: 200,
+      direction: "below",
+    })
+    updateVideoPreloadCandidate("above-nearby", {
+      canPrewarm: true,
+      distancePx: 120,
+      direction: "above",
+    })
+    updateVideoPreloadCandidate("above-secondary", {
+      canPrewarm: true,
+      distancePx: 1_400,
+      direction: "above",
+    })
+    updateVideoPreloadCandidate("above-far", {
+      canPrewarm: true,
+      distancePx: 5_800,
+      direction: "above",
+    })
+
+    setVideoPreloadScrollDirection("up")
+
+    expect(notifications.get("below-nearby")).toBeNull()
+    expect(notifications.get("above-nearby")).toBe(0)
+    expect(notifications.get("above-secondary")).toBe(1)
+    expect(notifications.get("above-far")).toBeNull()
   })
 
   it("does not count visible candidates toward the forward preload budget", () => {

@@ -176,7 +176,6 @@ export function AutoPlayVideo({
   })
 
   const canUseAutoPreload = autoPreloadRank !== null
-  const shouldPreloadNearbyForwardSource = isNearViewport && preloadDirection === "below"
   const shouldAggressivelyLoadSource =
     hasVideoSource &&
     shouldMountVideo &&
@@ -185,7 +184,7 @@ export function AutoPlayVideo({
       (autoPreloadRank !== null && autoPreloadRank <= 1))
   const shouldKeepAttachedSource =
     hasAttachedSource &&
-    (isInViewport || isVisible || canUseAutoPreload || shouldPreloadNearbyForwardSource)
+    (isInViewport || isVisible || canUseAutoPreload)
 
   const shouldRenderVideoSource =
     hasVideoSource &&
@@ -193,8 +192,7 @@ export function AutoPlayVideo({
     (shouldKeepAttachedSource ||
       canUseAutoPreload ||
       isInViewport ||
-      isVisible ||
-      shouldPreloadNearbyForwardSource)
+      isVisible)
 
   useLayoutEffect(() => {
     shouldAggressivelyLoadSourceRef.current = shouldAggressivelyLoadSource

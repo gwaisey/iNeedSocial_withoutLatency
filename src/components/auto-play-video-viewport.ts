@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from "react"
-import type { VideoPreloadDirection } from "../utils/video-preload-budget"
+import {
+  setVideoPreloadScrollDirection,
+  type VideoPreloadDirection,
+} from "../utils/video-preload-budget"
 import {
   VIDEO_EARLY_LOAD_DISTANCE_PX,
   VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS,
@@ -8,7 +11,7 @@ import {
   deriveVideoViewportState,
   getVideoPlaybackPriority,
   getViewportBounds,
-  shouldPromoteForwardPlaybackHandoff,
+  shouldPromotePlaybackHandoff,
   type VideoScrollDirection,
 } from "./auto-play-video-state"
 
@@ -161,12 +164,15 @@ export function useMountedVideoViewportState({
         }
       }
 
+      setVideoPreloadScrollDirection(scrollDirectionRef.current)
       lastScrollOffsetRef.current = scrollOffset
       wasVisibleRef.current = nextViewportState.isVisible
-      const isForwardHandoffCandidate = shouldPromoteForwardPlaybackHandoff({
+      const isForwardHandoffCandidate = shouldPromotePlaybackHandoff({
         isInViewport: nextViewportState.isInViewport,
+        rootBottom,
         rootTop,
         scrollDirection: scrollDirectionRef.current,
+        targetBottom: shellRect.bottom,
         targetTop: shellRect.top,
         visibleFraction: nextViewportState.visibleFraction,
       })
