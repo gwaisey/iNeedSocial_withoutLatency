@@ -309,7 +309,16 @@ export function AutoPlayVideo({
     let cancelled = false
 
     const bindDirectSource = () => {
+      video.preload = "auto"
       video.src = resolvedSrc
+      if (isDirectVideoFileSource(resolvedSrc) && video.readyState === 0) {
+        hasIssuedLoadHintRef.current = true
+        try {
+          video.load()
+        } catch {
+          // Ignore browsers that disallow load() in certain lifecycle moments.
+        }
+      }
       setHasConnectedPlaybackSource(true)
       sourceCleanupRef.current = () => {
         video.pause()
@@ -595,7 +604,7 @@ export function AutoPlayVideo({
           playsInline
           poster={resolvedPoster}
           preload={
-            shouldRenderVideoSource && hasConnectedPlaybackSource
+            shouldRenderVideoSource
               ? canUseAutoPreload || isInViewport || isNearViewport || isVisible
                 ? "auto"
                 : "metadata"

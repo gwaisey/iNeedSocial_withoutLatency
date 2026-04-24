@@ -3,6 +3,7 @@ import {
   buildVideoAspectRatio,
   deriveVideoViewportState,
   getVideoPlaybackDecision,
+  getVideoPlaybackPriority,
   shouldAttachVideoSource,
   shouldEarlyLoadNearViewport,
   shouldEnsureViewportData,
@@ -319,6 +320,32 @@ describe("auto-play video state", () => {
         visibleFraction: 0.4,
       })
     ).toBe(false)
+  })
+
+  it("prioritizes a forward handoff candidate once it reaches the normal play threshold", () => {
+    expect(
+      getVideoPlaybackPriority({
+        centerOffset: 620,
+        isForwardHandoffCandidate: true,
+        visibleFraction: 0.4,
+      })
+    ).toBe(-1)
+
+    expect(
+      getVideoPlaybackPriority({
+        centerOffset: 620,
+        isForwardHandoffCandidate: true,
+        visibleFraction: 0.2,
+      })
+    ).toBe(620)
+
+    expect(
+      getVideoPlaybackPriority({
+        centerOffset: 120,
+        isForwardHandoffCandidate: false,
+        visibleFraction: 0.7,
+      })
+    ).toBe(120)
   })
 
   it("builds aspect ratios only from valid intrinsic sizes", () => {

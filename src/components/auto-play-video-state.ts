@@ -277,6 +277,22 @@ export function shouldPromoteForwardPlaybackHandoff({
   )
 }
 
+export function getVideoPlaybackPriority({
+  centerOffset,
+  isForwardHandoffCandidate,
+  visibleFraction,
+}: {
+  readonly centerOffset: number
+  readonly isForwardHandoffCandidate: boolean
+  readonly visibleFraction: number
+}) {
+  if (isForwardHandoffCandidate && visibleFraction >= VIDEO_PLAY_START_VISIBLE_RATIO) {
+    return -1
+  }
+
+  return centerOffset
+}
+
 export function buildVideoAspectRatio({
   videoHeight,
   videoWidth,

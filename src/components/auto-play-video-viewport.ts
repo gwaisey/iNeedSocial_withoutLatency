@@ -6,6 +6,7 @@ import {
 } from "./auto-play-video-config"
 import {
   deriveVideoViewportState,
+  getVideoPlaybackPriority,
   getViewportBounds,
   shouldPromoteForwardPlaybackHandoff,
   type VideoScrollDirection,
@@ -174,7 +175,11 @@ export function useMountedVideoViewportState({
         isForwardHandoffCandidate,
         isInViewport: nextViewportState.isInViewport,
         isVisible: nextViewportState.isVisible,
-        playbackPriority: nextViewportState.centerOffset,
+        playbackPriority: getVideoPlaybackPriority({
+          centerOffset: nextViewportState.centerOffset,
+          isForwardHandoffCandidate,
+          visibleFraction: nextViewportState.visibleFraction,
+        }),
         preloadDirection: getViewportPreloadDirection(
           rootTop,
           rootBottom,
