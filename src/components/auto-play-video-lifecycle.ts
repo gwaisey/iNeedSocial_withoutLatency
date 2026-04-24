@@ -28,9 +28,25 @@ const VIDEO_PRELOAD_VERTICAL_MARGIN_PX = (() => {
   return Number.isFinite(parsedTopMargin) ? parsedTopMargin : 0
 })()
 
-function isInsidePrewarmWindow(rect: DOMRect | DOMRectReadOnly) {
-  const prewarmTop = -VIDEO_PRELOAD_VERTICAL_MARGIN_PX
-  const prewarmBottom = window.innerHeight + VIDEO_PRELOAD_VERTICAL_MARGIN_PX
+function getPrewarmRootBounds(root: HTMLElement | null) {
+  if (!root) {
+    return {
+      bottom: window.innerHeight,
+      top: 0,
+    }
+  }
+
+  const rect = root.getBoundingClientRect()
+  return {
+    bottom: rect.bottom,
+    top: rect.top,
+  }
+}
+
+function isInsidePrewarmWindow(rect: DOMRect | DOMRectReadOnly, root: HTMLElement | null) {
+  const rootBounds = getPrewarmRootBounds(root)
+  const prewarmTop = rootBounds.top - VIDEO_PRELOAD_VERTICAL_MARGIN_PX
+  const prewarmBottom = rootBounds.bottom + VIDEO_PRELOAD_VERTICAL_MARGIN_PX
   return rect.bottom >= prewarmTop && rect.top <= prewarmBottom
 }
 
@@ -239,11 +255,13 @@ export function useVideoCandidateLifecycle({
 export function useVideoPrewarmMount({
   canPrewarm,
   hasVideoSource,
+  scrollRootRef,
   setShouldMountVideo,
   shellRef,
 }: {
   readonly canPrewarm: boolean
   readonly hasVideoSource: boolean
+  readonly scrollRootRef?: RefObject<HTMLElement | null>
   readonly setShouldMountVideo: Dispatch<SetStateAction<boolean>>
   readonly shellRef: RefObject<HTMLDivElement | null>
 }) {
@@ -253,12 +271,15 @@ export function useVideoPrewarmMount({
     }
 
     const shell = shellRef.current
-    if (!shell || !isInsidePrewarmWindow(shell.getBoundingClientRect())) {
+    if (
+      !shell ||
+      !isInsidePrewarmWindow(shell.getBoundingClientRect(), scrollRootRef?.current ?? null)
+    ) {
       return
     }
 
     setShouldMountVideo(true)
-  }, [canPrewarm, hasVideoSource, setShouldMountVideo, shellRef])
+  }, [canPrewarm, hasVideoSource, scrollRootRef, setShouldMountVideo, shellRef])
 
   useEffect(() => {
     if (!hasVideoSource) {
@@ -277,6 +298,7 @@ export function useVideoPrewarmMount({
         }
       },
       {
+        root: scrollRootRef?.current ?? null,
         rootMargin: VIDEO_PRELOAD_ROOT_MARGIN,
         threshold: 0,
       }
@@ -286,7 +308,7 @@ export function useVideoPrewarmMount({
     return () => {
       observer.disconnect()
     }
-  }, [canPrewarm, hasVideoSource, setShouldMountVideo, shellRef])
+  }, [canPrewarm, hasVideoSource, scrollRootRef, setShouldMountVideo, shellRef])
 }
 
 export function useVideoSourceLifecycleReset({

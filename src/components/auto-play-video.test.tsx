@@ -6,6 +6,7 @@ import { resetCloudflareStreamWarmupState } from "./auto-play-video-stream-warmu
 const hlsAttachMediaSpy = vi.fn()
 const hlsLoadSourceSpy = vi.fn()
 const hlsDestroySpy = vi.fn()
+const intersectionObserverInstances: IntersectionObserver[] = []
 
 vi.mock("hls.js", () => {
   class MockHls {
@@ -22,7 +23,7 @@ vi.mock("hls.js", () => {
 })
 
 class MockIntersectionObserver implements IntersectionObserver {
-  readonly root = null
+  readonly root: Element | Document | null
   readonly rootMargin: string
   readonly thresholds: ReadonlyArray<number>
 
@@ -30,10 +31,12 @@ class MockIntersectionObserver implements IntersectionObserver {
     private readonly callback: IntersectionObserverCallback,
     options: IntersectionObserverInit = {}
   ) {
+    this.root = options.root ?? null
     this.rootMargin = options.rootMargin ?? "0px"
     this.thresholds = Array.isArray(options.threshold)
       ? options.threshold
       : [options.threshold ?? 0]
+    intersectionObserverInstances.push(this)
   }
 
   disconnect() {}
@@ -86,6 +89,7 @@ describe("AutoPlayVideo", () => {
     )
     originalFetch = globalThis.fetch
 
+    intersectionObserverInstances.length = 0
     window.IntersectionObserver = MockIntersectionObserver
     HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
     HTMLMediaElement.prototype.pause = vi.fn()
@@ -304,6 +308,29 @@ describe("AutoPlayVideo", () => {
     fireEvent.loadedMetadata(video)
 
     expect(shell.style.aspectRatio).toBe("720 / 400")
+  })
+
+  it("uses the feed scroll root for early prewarm observation", async () => {
+    const scrollRoot = document.createElement("div")
+    const scrollRootRef = { current: scrollRoot }
+
+    render(
+      <AutoPlayVideo
+        className="video"
+        isMuted={true}
+        scrollRootRef={scrollRootRef}
+        src="/content/videos/pinata.mp4"
+      />
+    )
+
+    await waitFor(() => {
+      expect(
+        intersectionObserverInstances.some(
+          (observer) =>
+            observer.root === scrollRoot && observer.rootMargin === "12000px 0px"
+        )
+      ).toBe(true)
+    })
   })
 
   it("uses hls.js for Cloudflare Stream manifests when native HLS is unavailable", async () => {

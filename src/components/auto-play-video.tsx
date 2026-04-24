@@ -92,6 +92,7 @@ export function AutoPlayVideo({
   const hasPendingPlayAttemptRef = useRef(false)
   const hasIssuedLoadHintRef = useRef(false)
   const hasIssuedVisibleLoadHintRef = useRef(false)
+  const shouldAggressivelyLoadSourceRef = useRef(false)
   const [autoPreloadRank, setAutoPreloadRank] = useState<number | null>(null)
   const [hasAttachedSource, setHasAttachedSource] = useState(false)
   const [hasConnectedPlaybackSource, setHasConnectedPlaybackSource] = useState(false)
@@ -160,6 +161,7 @@ export function AutoPlayVideo({
   useVideoPrewarmMount({
     canPrewarm,
     hasVideoSource,
+    scrollRootRef,
     setShouldMountVideo,
     shellRef,
   })
@@ -175,6 +177,12 @@ export function AutoPlayVideo({
 
   const canUseAutoPreload = autoPreloadRank !== null
   const shouldPreloadNearbyForwardSource = isNearViewport && preloadDirection === "below"
+  const shouldAggressivelyLoadSource =
+    hasVideoSource &&
+    shouldMountVideo &&
+    (isInViewport ||
+      isPlaybackVisible ||
+      (autoPreloadRank !== null && autoPreloadRank <= 1))
   const shouldKeepAttachedSource =
     hasAttachedSource &&
     (isInViewport || isVisible || canUseAutoPreload || shouldPreloadNearbyForwardSource)
@@ -187,6 +195,11 @@ export function AutoPlayVideo({
       isInViewport ||
       isVisible ||
       shouldPreloadNearbyForwardSource)
+
+  useLayoutEffect(() => {
+    shouldAggressivelyLoadSourceRef.current = shouldAggressivelyLoadSource
+  }, [shouldAggressivelyLoadSource])
+
   const shouldWarmCloudflareStream =
     shouldMountVideo &&
     isHlsManifestSource(resolvedSrc) &&
@@ -313,10 +326,15 @@ export function AutoPlayVideo({
     let cancelled = false
 
     const bindDirectSource = () => {
+      const shouldAutoLoadNow = shouldAggressivelyLoadSourceRef.current
       hasIssuedVisibleLoadHintRef.current = false
-      video.preload = "auto"
+      video.preload = shouldAutoLoadNow ? "auto" : "metadata"
       video.src = resolvedSrc
-      if (isDirectVideoFileSource(resolvedSrc) && video.readyState === 0) {
+      if (
+        isDirectVideoFileSource(resolvedSrc) &&
+        shouldAutoLoadNow &&
+        video.readyState === 0
+      ) {
         hasIssuedLoadHintRef.current = true
         try {
           video.load()
@@ -434,9 +452,14 @@ export function AutoPlayVideo({
       return
     }
 
-    // Nudge the browser to start fetching bytes for offscreen preload candidates. This is
-    // intentionally fire-once per source to avoid churn while scrolling.
-    if (!canUseAutoPreload && !isNearViewport) {
+    // Nudge the browser to start fetching bytes for the current or immediate next
+    // playback candidate. Avoid auto-loading several offscreen videos at once because
+    // browser media connection limits can delay the video the user reaches next.
+    if (
+      (autoPreloadRank === null || autoPreloadRank > 1) &&
+      !isPlaybackVisible &&
+      !isInViewport
+    ) {
       return
     }
 
@@ -453,17 +476,19 @@ export function AutoPlayVideo({
     }
 
     hasIssuedLoadHintRef.current = true
+    video.preload = "auto"
     try {
       video.load()
     } catch {
       // Ignore browsers that disallow load() in certain lifecycle moments.
     }
   }, [
-    canUseAutoPreload,
+    autoPreloadRank,
     hasAttachedSource,
     hasConnectedPlaybackSource,
     hasVideoSource,
-    isNearViewport,
+    isInViewport,
+    isPlaybackVisible,
     resolvedSrc,
     shouldMountVideo,
   ])
@@ -486,6 +511,7 @@ export function AutoPlayVideo({
     }
 
     hasIssuedVisibleLoadHintRef.current = true
+    video.preload = "auto"
     try {
       video.load()
     } catch {
@@ -645,11 +671,7 @@ export function AutoPlayVideo({
           playsInline
           poster={resolvedPoster}
           preload={
-            shouldRenderVideoSource
-              ? canUseAutoPreload || isInViewport || isNearViewport || isVisible
-                ? "auto"
-                : "metadata"
-              : "none"
+            shouldRenderVideoSource ? (shouldAggressivelyLoadSource ? "auto" : "metadata") : "none"
           }
         />
       )}

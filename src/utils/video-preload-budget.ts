@@ -8,9 +8,9 @@ type VideoPreloadCandidate = {
   notify: (preloadRank: VideoPreloadRank) => void
 }
 
-// Keep auto-preloading focused on the next few videos so we buffer enough data
-// for instant playback once a video becomes visible, especially on real networks.
-const MAX_AUTO_PRELOAD_VIDEOS = 4
+// Keep aggressive auto-preloading focused on the immediate upcoming videos. Letting
+// too many Cloudflare MP4 redirects download at once can starve the next focused video.
+const MAX_AUTO_PRELOAD_VIDEOS = 3
 const MAX_BELOW_PRELOAD_DISTANCE_PX = 12000
 const MAX_ABOVE_PRELOAD_DISTANCE_PX = 900
 const registry = new Map<string, VideoPreloadCandidate>()

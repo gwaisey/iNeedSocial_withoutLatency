@@ -61,7 +61,7 @@ describe("video preload budget", () => {
     expect(notifications.get("video-c")).toBeNull()
     expect(notifications.get("video-d")).toBe(1)
     expect(notifications.get("video-e")).toBe(2)
-    expect(notifications.get("video-f")).toBe(3)
+    expect(notifications.get("video-f")).toBeNull()
 
     unregisterVideoPreloadCandidate("video-a")
 
@@ -69,7 +69,7 @@ describe("video preload budget", () => {
     expect(notifications.get("video-c")).toBeNull()
     expect(notifications.get("video-d")).toBe(1)
     expect(notifications.get("video-e")).toBe(2)
-    expect(notifications.get("video-f")).toBe(3)
+    expect(notifications.get("video-f")).toBeNull()
   })
 
   it("does not count visible candidates toward the forward preload budget", () => {
@@ -146,7 +146,7 @@ describe("video preload budget", () => {
     expect(notifications.get("up-next-a")).toBe(0)
     expect(notifications.get("up-next-b")).toBe(1)
     expect(notifications.get("up-next-c")).toBe(2)
-    expect(notifications.get("up-next-d")).toBe(3)
+    expect(notifications.get("up-next-d")).toBeNull()
     expect(notifications.get("above-nearby")).toBeNull()
   })
 
