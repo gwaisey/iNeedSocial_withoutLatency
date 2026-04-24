@@ -7,15 +7,17 @@ type VideoWithFrameCallback = HTMLVideoElement & {
       now: DOMHighResTimeStamp,
       metadata: VideoFrameCallbackMetadata
     ) => void
-  ) => VideoFrameCallbackHandle
+    ) => VideoFrameCallbackHandle
 }
+
+const VIDEO_FRAME_CALLBACK_FALLBACK_MS = 900
 
 export function scheduleFirstRenderableVideoFrame(
   video: HTMLVideoElement,
   onReady: () => void
 ) {
   let cancelled = false
-  let animationFrameId: number | null = null
+  let fallbackTimeoutId: number | null = null
   let videoFrameCallbackHandle: VideoFrameCallbackHandle | null = null
 
   const markReady = () => {
@@ -33,11 +35,7 @@ export function scheduleFirstRenderableVideoFrame(
       markReady()
     })
 
-    animationFrameId = window.requestAnimationFrame(() => {
-      if (!cancelled) {
-        markReady()
-      }
-    })
+    fallbackTimeoutId = window.setTimeout(markReady, VIDEO_FRAME_CALLBACK_FALLBACK_MS)
   } else {
     markReady()
   }
@@ -45,8 +43,8 @@ export function scheduleFirstRenderableVideoFrame(
   return () => {
     cancelled = true
 
-    if (animationFrameId !== null) {
-      window.cancelAnimationFrame(animationFrameId)
+    if (fallbackTimeoutId !== null) {
+      window.clearTimeout(fallbackTimeoutId)
     }
 
     if (

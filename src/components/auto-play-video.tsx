@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type RefObject,
@@ -90,6 +91,7 @@ export function AutoPlayVideo({
   const detachSourceTimeoutRef = useRef<number | null>(null)
   const hasPendingPlayAttemptRef = useRef(false)
   const hasIssuedLoadHintRef = useRef(false)
+  const hasIssuedVisibleLoadHintRef = useRef(false)
   const [autoPreloadRank, setAutoPreloadRank] = useState<number | null>(null)
   const [hasAttachedSource, setHasAttachedSource] = useState(false)
   const [hasConnectedPlaybackSource, setHasConnectedPlaybackSource] = useState(false)
@@ -207,7 +209,7 @@ export function AutoPlayVideo({
     src: resolvedSrc,
   })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!shouldRenderVideoSource || hasAttachedSource) {
       return
     }
@@ -233,6 +235,7 @@ export function AutoPlayVideo({
       clearScheduledSourceDetach()
       hasPendingPlayAttemptRef.current = false
       hasIssuedLoadHintRef.current = false
+      hasIssuedVisibleLoadHintRef.current = false
       sourceCleanupRef.current?.()
       sourceCleanupRef.current = null
       setHasConnectedPlaybackSource(false)
@@ -287,6 +290,7 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     hasIssuedLoadHintRef.current = false
+    hasIssuedVisibleLoadHintRef.current = false
   }, [resolvedSrc])
 
   useEffect(() => {
@@ -300,7 +304,7 @@ export function AutoPlayVideo({
     }
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const video = videoRef.current
     if (!video || !resolvedSrc || !hasAttachedSource) {
       return
@@ -309,6 +313,7 @@ export function AutoPlayVideo({
     let cancelled = false
 
     const bindDirectSource = () => {
+      hasIssuedVisibleLoadHintRef.current = false
       video.preload = "auto"
       video.src = resolvedSrc
       if (isDirectVideoFileSource(resolvedSrc) && video.readyState === 0) {
@@ -465,6 +470,41 @@ export function AutoPlayVideo({
 
   useEffect(() => {
     const video = videoRef.current
+    if (
+      !video ||
+      !hasVideoSource ||
+      !hasConnectedPlaybackSource ||
+      !hasAttachedSource ||
+      !isDirectVideoFileSource(resolvedSrc) ||
+      hasIssuedVisibleLoadHintRef.current ||
+      hasPendingPlayAttemptRef.current ||
+      !video.paused ||
+      video.readyState > 0 ||
+      (!isPlaybackVisible && !isInViewport)
+    ) {
+      return
+    }
+
+    hasIssuedVisibleLoadHintRef.current = true
+    try {
+      video.load()
+    } catch {
+      // Ignore browsers that disallow load() during a visibility transition.
+    }
+  }, [
+    hasAttachedSource,
+    hasConnectedPlaybackSource,
+    hasVideoSource,
+    isInViewport,
+    isPlaybackVisible,
+    resolvedSrc,
+  ])
+
+  const shouldAutoplayVisibleVideo =
+    isMuted && isActive && isPlaybackOwner && isPlaybackVisible && hasConnectedPlaybackSource
+
+  useEffect(() => {
+    const video = videoRef.current
     if (!video) {
       return
     }
@@ -596,6 +636,7 @@ export function AutoPlayVideo({
       {hasVideoSource && shouldMountVideo && (
         <video
           ref={videoRef}
+          autoPlay={shouldAutoplayVisibleVideo}
           className={`${className} absolute inset-0 h-full w-full object-cover ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
           loop
           muted={isMuted}

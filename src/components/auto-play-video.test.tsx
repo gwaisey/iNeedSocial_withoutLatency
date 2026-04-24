@@ -93,6 +93,7 @@ describe("AutoPlayVideo", () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllEnvs()
     window.IntersectionObserver = originalIntersectionObserver
@@ -127,7 +128,6 @@ describe("AutoPlayVideo", () => {
       globalThis.fetch = originalFetch
     }
 
-    vi.restoreAllMocks()
     hlsAttachMediaSpy.mockReset()
     hlsDestroySpy.mockReset()
     hlsLoadSourceSpy.mockReset()
@@ -174,14 +174,7 @@ describe("AutoPlayVideo", () => {
   })
 
   it("waits for requestVideoFrameCallback before revealing the video when available", async () => {
-    let queuedAnimationFrame: FrameRequestCallback | null = null
     let frameCallback: (() => void) | null = null
-
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      queuedAnimationFrame = callback
-      return 1
-    })
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {})
 
     Reflect.set(
       HTMLVideoElement.prototype,
@@ -206,7 +199,6 @@ describe("AutoPlayVideo", () => {
     fireEvent.loadedData(video!)
     expect(video).toHaveClass("opacity-0")
     expect(frameCallback).not.toBeNull()
-    expect(queuedAnimationFrame).not.toBeNull()
 
     const queuedFrameCallback = frameCallback as (() => void) | null
     if (!queuedFrameCallback) {
@@ -218,6 +210,51 @@ describe("AutoPlayVideo", () => {
     await waitFor(() => {
       expect(video).toHaveClass("opacity-100")
     })
+  })
+
+  it("keeps the poster in place until requestVideoFrameCallback fires", async () => {
+    let frameCallback: (() => void) | null = null
+
+    Reflect.set(
+      HTMLVideoElement.prototype,
+      "requestVideoFrameCallback",
+      vi.fn((callback: () => void) => {
+        frameCallback = callback
+        return 1
+      })
+    )
+    Reflect.set(HTMLVideoElement.prototype, "cancelVideoFrameCallback", vi.fn())
+
+    const { container } = render(
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector("video")).not.toBeNull()
+    })
+
+    vi.useFakeTimers()
+    const video = container.querySelector("video")
+    video!.currentTime = 0.04
+    fireEvent.loadedData(video!)
+
+    act(() => {
+      vi.advanceTimersByTime(899)
+    })
+
+    expect(video).toHaveClass("opacity-0")
+
+    const queuedFrameCallback = frameCallback as (() => void) | null
+    if (!queuedFrameCallback) {
+      throw new Error("Expected requestVideoFrameCallback to be queued.")
+    }
+
+    act(() => {
+      queuedFrameCallback()
+    })
+
+    expect(video).toHaveClass("opacity-100")
+    vi.useRealTimers()
   })
 
   it("falls back to immediate readiness when requestVideoFrameCallback is unavailable", async () => {
@@ -444,7 +481,7 @@ describe("AutoPlayVideo", () => {
     )
 
     act(() => {
-      vi.advanceTimersByTime(1_999)
+      vi.advanceTimersByTime(4_499)
     })
 
     expect(container.querySelector("video")?.getAttribute("src")).toBe(

@@ -28,6 +28,9 @@ type FeedPostMediaProps = {
 
 type FeedMediaItem = Post["media"][number]
 
+const VIDEO_PLACEHOLDER_CLASS = "bg-black"
+const VIDEO_SKELETON_CLASS = "video-skeleton"
+
 function FeedVideoSurface({
   canPrewarm,
   className,
@@ -40,7 +43,6 @@ function FeedVideoSurface({
   shellClassName,
   streamUid,
   streamDelivery,
-  tokens,
 }: {
   readonly canPrewarm?: boolean
   readonly className: string
@@ -53,7 +55,6 @@ function FeedVideoSurface({
   readonly shellClassName?: string
   readonly streamDelivery?: FeedMediaItem["streamDelivery"]
   readonly streamUid?: string
-  readonly tokens: MediaSurfaceTokens
 }) {
   return (
     <AutoPlayVideo
@@ -63,11 +64,11 @@ function FeedVideoSurface({
       isMuted={isMuted}
       onLoadedMetadata={onLoadedMetadata}
       onPosterLoad={onPosterLoad}
-      placeholderClassName={tokens.placeholder}
+      placeholderClassName={VIDEO_PLACEHOLDER_CLASS}
       poster={media?.poster}
       scrollRootRef={scrollRootRef}
       shellClassName={shellClassName}
-      skeletonClassName={tokens.skeletonTone}
+      skeletonClassName={VIDEO_SKELETON_CLASS}
       src={media?.src}
       streamDelivery={streamDelivery ?? media?.streamDelivery}
       streamUid={streamUid ?? media?.streamUid}
@@ -127,7 +128,6 @@ function FeedPostVideoMedia({
         media={primaryMedia}
         scrollRootRef={scrollRootRef}
         shellClassName="w-full"
-        tokens={tokens}
       />
       <MediaMuteButton isMuted={isMuted} onClick={onToggleMute} postId={post.id} />
     </div>
@@ -234,7 +234,6 @@ function FeedPostCarouselMedia({
               }}
               scrollRootRef={scrollRootRef}
               shellClassName="w-full shrink-0"
-              tokens={tokens}
             />
           ) : (
             <FeedImageSurface
