@@ -11,6 +11,7 @@ import {
 import { ProgressiveImage } from "./progressive-image"
 import {
   buildKnownVideoAspectRatioHeight,
+  buildKnownImageAspectRatioHeight,
   buildVideoAspectRatioHeight,
   buildImageAspectRatioHeight,
   getMediaSurfaceTokens,
@@ -166,7 +167,7 @@ function FeedPostCarouselMedia({
       return
     }
 
-    const syncKnownVideoHeights = () => {
+    const syncKnownMediaHeights = () => {
       const width = carousel.clientWidth
       if (width <= 0) {
         return
@@ -177,7 +178,7 @@ function FeedPostCarouselMedia({
           poster: item.poster,
           src: item.src,
           width,
-        })
+        }) ?? buildKnownImageAspectRatioHeight({ src: item.src, width })
 
         if (knownHeight !== null) {
           updateSlideHeight(index, knownHeight)
@@ -185,16 +186,16 @@ function FeedPostCarouselMedia({
       })
     }
 
-    syncKnownVideoHeights()
+    syncKnownMediaHeights()
 
     if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", syncKnownVideoHeights)
+      window.addEventListener("resize", syncKnownMediaHeights)
       return () => {
-        window.removeEventListener("resize", syncKnownVideoHeights)
+        window.removeEventListener("resize", syncKnownMediaHeights)
       }
     }
 
-    const resizeObserver = new ResizeObserver(syncKnownVideoHeights)
+    const resizeObserver = new ResizeObserver(syncKnownMediaHeights)
     resizeObserver.observe(carousel)
 
     return () => {

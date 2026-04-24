@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "export:all-sessions": "node ./scripts/export-all-sessions.mjs",
+    "generate:image-dimensions": "node ./scripts/generate-image-dimensions.mjs",
     "generate:video-posters": "node ./scripts/generate-video-posters.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test"
