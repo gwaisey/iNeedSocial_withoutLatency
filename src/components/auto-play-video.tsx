@@ -587,33 +587,33 @@ export function AutoPlayVideo({
       return
     }
 
-    playPromise.then(() => {
-      hasPendingPlayAttemptRef.current = false
-      if (!hasLoadedFrame) {
-        queueFrameReady(video)
-      }
+    void playPromise
+      .then(() => {
+        hasPendingPlayAttemptRef.current = false
+        if (!hasLoadedFrame) {
+          queueFrameReady(video)
+        }
 
-      if (!shouldStartMuted) {
-        return
-      }
+        if (!shouldStartMuted) {
+          return
+        }
 
-      syncVideoMutedState(video, isMuted)
-    })
-
-    playPromise.catch((error) => {
-      hasPendingPlayAttemptRef.current = false
-      reportVideoPlayIssue({
-        classification: classifyVideoPlayError(error),
-        distanceToViewport,
-        error,
-        isActive,
-        isInViewport,
-        isMuted,
-        isVisible,
-        lastReportedIssueRef: lastReportedPlayIssueRef,
-        src: resolvedSrc,
+        syncVideoMutedState(video, isMuted)
       })
-    })
+      .catch((error) => {
+        hasPendingPlayAttemptRef.current = false
+        reportVideoPlayIssue({
+          classification: classifyVideoPlayError(error),
+          distanceToViewport,
+          error,
+          isActive,
+          isInViewport,
+          isMuted,
+          isVisible,
+          lastReportedIssueRef: lastReportedPlayIssueRef,
+          src: resolvedSrc,
+        })
+      })
   }, [
     distanceToViewport,
     hasLoadedFrame,

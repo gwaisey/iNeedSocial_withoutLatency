@@ -1,7 +1,9 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AutoPlayVideo } from "./auto-play-video"
 import { resetCloudflareStreamWarmupState } from "./auto-play-video-stream-warmup"
+import { resetVideoPlaybackCoordinatorForTests } from "./video-playback-coordinator"
+import { resetVideoPreloadBudgetForTests } from "../utils/video-preload-budget"
 
 const hlsAttachMediaSpy = vi.fn()
 const hlsLoadSourceSpy = vi.fn()
@@ -97,6 +99,9 @@ describe("AutoPlayVideo", () => {
   })
 
   afterEach(() => {
+    cleanup()
+    resetVideoPlaybackCoordinatorForTests()
+    resetVideoPreloadBudgetForTests()
     vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllEnvs()
@@ -367,6 +372,47 @@ describe("AutoPlayVideo", () => {
     expect(hlsAttachMediaSpy).toHaveBeenCalledWith(container.querySelector("video"))
   })
 
+  it("handles interrupted autoplay promises without leaking an unhandled rejection", async () => {
+    const autoplayError = new Error("The play() request was interrupted by a call to pause().")
+    autoplayError.name = "AbortError"
+    HTMLMediaElement.prototype.play = vi.fn().mockRejectedValue(autoplayError)
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 854,
+      height: 854,
+      left: 0,
+      right: 480,
+      toJSON: () => ({}),
+      top: 0,
+      width: 480,
+      x: 0,
+      y: 0,
+    } as DOMRect)
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    render(
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+    )
+
+    await waitFor(() => {
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
+    })
+
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[monitoring:video-playback] Video autoplay was blocked or interrupted.",
+        expect.objectContaining({
+          error: expect.objectContaining({
+            name: "AbortError",
+          }),
+          metadata: expect.objectContaining({
+            classification: "interrupted",
+            stage: "autoplay",
+          }),
+        })
+      )
+    })
+  })
+
   it("warms Cloudflare Stream playback with preconnect links and a manifest fetch", async () => {
     vi.stubEnv("VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE", "mjiwvs3h8hhcy2t8")
     vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("")
@@ -486,37 +532,40 @@ describe("AutoPlayVideo", () => {
     vi.useFakeTimers()
 
     rect = {
-      bottom: -1_200,
+      bottom: -6_000,
       height: 600,
       left: 0,
       right: 480,
       toJSON: () => ({}),
-      top: -1_800,
+      top: -6_600,
       width: 480,
       x: 0,
-      y: -1_800,
+      y: -6_600,
     } as DOMRect
 
     fireEvent.scroll(document)
 
     await act(async () => {
       flushAnimationFrames()
+      await Promise.resolve()
     })
 
     expect(container.querySelector("video")?.getAttribute("src")).toBe(
       "/content/videos/pinata.mp4"
     )
 
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(4_499)
+      await Promise.resolve()
     })
 
     expect(container.querySelector("video")?.getAttribute("src")).toBe(
       "/content/videos/pinata.mp4"
     )
 
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(1)
+      await Promise.resolve()
     })
 
     expect(container.querySelector("video")?.getAttribute("src")).toBeNull()

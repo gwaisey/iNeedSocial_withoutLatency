@@ -179,6 +179,16 @@ async function seedActiveStudySession(page: Page, sessionId: string) {
   }, sessionId)
 }
 
+async function seedCompletedTutorialSession(page: Page, sessionId: string) {
+  await page.addInitScript((targetSessionId) => {
+    window.sessionStorage.setItem("ineedsocial:study:active-session", targetSessionId)
+    window.sessionStorage.setItem(
+      `ineedsocial:study:${targetSessionId}:tutorial`,
+      JSON.stringify({ completed: true, currentStep: 0 })
+    )
+  }, sessionId)
+}
+
 async function installControllableFeedOverride(
   page: Page,
   {
@@ -444,6 +454,54 @@ test("browser back and forward preserve an unfinished session", async ({ page })
     await page.evaluate(() => window.sessionStorage.getItem("ineedsocial:study:active-session"))
   ).toBe(activeSessionId)
   expect(await isPostLikedInSession(page, likedPostId)).toBe(true)
+})
+
+test("mobile feed scrolls the document so browser chrome can collapse", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await seedCompletedTutorialSession(page, "study_mobile_document_scroll")
+
+  await page.goto("/feed?theme=light")
+  await page.getByTestId("feed-scroll-container").waitFor({ state: "visible" })
+  await waitForVisibleFeedPost(page)
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const feed = document.querySelector<HTMLElement>(
+            '[data-testid="feed-scroll-container"]'
+          )
+
+          return {
+            documentCanScroll:
+              document.documentElement.scrollHeight > window.innerHeight + 1_000,
+            feedOverflowY: feed ? getComputedStyle(feed).overflowY : null,
+            feedScrollTop: feed?.scrollTop ?? null,
+          }
+        }),
+      {
+        message: "Expected the mobile feed to use document scrolling",
+      }
+    )
+    .toEqual({
+      documentCanScroll: true,
+      feedOverflowY: "visible",
+      feedScrollTop: 0,
+    })
+
+  await page.mouse.wheel(0, 1_400)
+
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), {
+      message: "Expected mobile feed gestures to move document scrollY",
+    })
+    .toBeGreaterThan(500)
+
+  await expect
+    .poll(() => getFeedScrollTop(page), {
+      message: "Expected mobile feed element not to own the scroll position",
+    })
+    .toBe(0)
 })
 
 test("tutorial overlay blocks feed interactions until dismissed", async ({ page }) => {
