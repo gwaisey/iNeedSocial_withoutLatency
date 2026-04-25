@@ -24,7 +24,6 @@ export function FeedPostCarouselMedia({
   tokens,
 }: FeedPostMediaSectionProps) {
   const { media } = post
-  const mediaHasVideo = media.some((item) => isVideoMedia(item))
   const {
     activeIdx,
     currentSlideHeight,
@@ -35,6 +34,8 @@ export function FeedPostCarouselMedia({
     updateSlideHeight,
   } = useFeedCarousel({ mediaLength: media.length })
   const carouselRef = useRef<HTMLDivElement | null>(null)
+  const activeMedia = media[activeIdx]
+  const activeSlideHasVideo = isVideoMedia(activeMedia)
 
   useLayoutEffect(() => {
     const carousel = carouselRef.current
@@ -127,7 +128,7 @@ export function FeedPostCarouselMedia({
         )}
       </div>
 
-      {mediaHasVideo && (
+      {activeSlideHasVideo && (
         <MediaMuteButton isMuted={isMuted} onClick={onToggleMute} postId={post.id} />
       )}
 
