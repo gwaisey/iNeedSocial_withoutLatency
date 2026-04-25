@@ -1,148 +1,17 @@
-import { expect, test, type Page } from "@playwright/test"
-
-async function dismissTutorialIfVisible(page: Page) {
-  const tutorialSkipButton = page.getByTestId("tutorial-skip-button")
-  const tutorialIsVisible = await tutorialSkipButton
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false)
-
-  if (tutorialIsVisible) {
-    await tutorialSkipButton.click({ force: true })
-    await page
-      .waitForFunction(() => !document.querySelector('[data-testid="tutorial-skip-button"]'), {
-        timeout: 5_000,
-      })
-      .catch(() => {})
-  }
-}
-
-async function getFeedScrollTop(page: Page) {
-  return page.getByTestId("feed-scroll-container").evaluate((element) => element.scrollTop)
-}
-
-async function setFeedScrollTop(page: Page, top: number) {
-  await page.getByTestId("feed-scroll-container").evaluate((element, nextTop) => {
-    element.scrollTop = nextTop
-    element.dispatchEvent(new Event("scroll"))
-  }, top)
-}
-
-async function waitForFeedScrollTopAtLeast(page: Page, minimumTop: number) {
-  await expect
-    .poll(async () => getFeedScrollTop(page), {
-      message: `Expected feed scrollTop to reach at least ${minimumTop}px`,
-    })
-    .toBeGreaterThan(minimumTop)
-}
-
-async function waitForRenderedImageMedia(page: Page, postId: string) {
-  await page.waitForFunction((targetPostId) => {
-    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
-    if (!post) {
-      return false
-    }
-
-    const images = Array.from(post.querySelectorAll("img[alt]"))
-    if (!images.length) {
-      return false
-    }
-
-    return images.some((node) => {
-      if (!(node instanceof HTMLImageElement)) {
-        return false
-      }
-
-      const style = window.getComputedStyle(node)
-      return node.complete && node.naturalWidth > 0 && style.opacity !== "0"
-    })
-  }, postId)
-}
-
-async function waitForRenderedVideoMedia(page: Page, postId: string) {
-  await page.waitForFunction((targetPostId) => {
-    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
-    if (!post) {
-      return false
-    }
-
-    const video = post.querySelector("video")
-    if (!(video instanceof HTMLVideoElement)) {
-      return false
-    }
-
-    const style = window.getComputedStyle(video)
-    return style.opacity !== "0" && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
-  }, postId)
-}
-
-async function waitForRenderedVideoFallbackMedia(page: Page, postId: string) {
-  await page.waitForFunction((targetPostId) => {
-    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
-    if (!post) {
-      return false
-    }
-
-    const poster = post.querySelector('img[aria-hidden="true"]')
-    if (!(poster instanceof HTMLImageElement)) {
-      return false
-    }
-
-    return poster.complete && poster.naturalWidth > 0
-  }, postId)
-}
-
-async function waitForVideoPlaying(page: Page, postId: string) {
-  await page.waitForFunction((targetPostId) => {
-    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
-    const video = post?.querySelector("video")
-    return (
-      video instanceof HTMLVideoElement &&
-      !video.paused &&
-      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
-    )
-  }, postId)
-}
-
-async function waitForVideoPausedAndReset(page: Page, postId: string) {
-  await page.waitForFunction((targetPostId) => {
-    const post = document.querySelector<HTMLElement>(`[data-regular-post-id="${targetPostId}"]`)
-    const video = post?.querySelector("video")
-    return (
-      video instanceof HTMLVideoElement &&
-      video.paused &&
-      Math.abs(video.currentTime) < 0.05
-    )
-  }, postId)
-}
-
-async function waitForSinglePlayingVideo(page: Page, expectedPostId: string) {
-  await page.waitForFunction((targetPostId) => {
-    const playingVideos = Array.from(document.querySelectorAll("video")).filter((node) => {
-      return node instanceof HTMLVideoElement && !node.paused
-    })
-
-    if (playingVideos.length !== 1) {
-      return false
-    }
-
-    const ownerPost = playingVideos[0].closest<HTMLElement>("[data-regular-post-id]")
-    return ownerPost?.dataset.regularPostId === targetPostId
-  }, expectedPostId)
-}
-
-async function scrollPostIntoView(page: Page, postId: string) {
-  const post = page.locator(`[data-regular-post-id="${postId}"]`)
-  await post.scrollIntoViewIfNeeded()
-  await expect(post).toBeVisible()
-}
-
-async function startStudy(page: Page) {
-  await page.goto("/")
-  await page.waitForURL("**/welcome")
-  await page.getByTestId("start-study-button").click()
-  await page.waitForURL("**/feed?theme=light")
-}
+import { expect, test } from "@playwright/test"
+import {
+  scrollPostIntoView,
+  setFeedScrollTop,
+  waitForFeedScrollTopAtLeast,
+  waitForRenderedImageMedia,
+  waitForRenderedVideoFallbackMedia,
+  waitForRenderedVideoMedia,
+  waitForSinglePlayingVideo,
+  waitForVideoPausedAndReset,
+  waitForVideoPlaying,
+} from "./helpers/feed"
+import { startStudy } from "./helpers/session"
+import { dismissTutorialIfVisible } from "./helpers/tutorial"
 
 test("only the visible video plays and it resets after leaving the viewport", async ({ page }) => {
   await startStudy(page)

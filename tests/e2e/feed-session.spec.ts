@@ -1,97 +1,23 @@
 import { expect, test, type Page } from "@playwright/test"
-
-type FeedOverrideMode = "malformed" | "passthrough"
-
-function sumGenreTimes(snapshot: {
-  genreTimes?: Record<string, number>
-} | null) {
-  return Object.values(snapshot?.genreTimes ?? {}).reduce(
-    (total, value) => total + value,
-    0
-  )
-}
-
-async function readSessionSnapshot(page: Page) {
-  return page.evaluate(() => {
-    const sessionId = window.sessionStorage.getItem("ineedsocial:study:active-session")
-    if (!sessionId) {
-      return null
-    }
-
-    const raw = window.sessionStorage.getItem(`ineedsocial:study:${sessionId}:feed-session`)
-    return raw
-      ? (JSON.parse(raw) as {
-          genreTimes?: Record<string, number>
-          hasSubmitted?: boolean
-          session_id?: string
-          status?: string
-          submissionHasError?: boolean
-          submissionMessage?: string | null
-        })
-      : null
-  })
-}
-
-async function isPostLikedInSession(page: Page, postId: string | null) {
-  return page.evaluate((targetPostId) => {
-    if (!targetPostId) {
-      return false
-    }
-
-    const sessionId = window.sessionStorage.getItem("ineedsocial:study:active-session")
-    if (!sessionId) {
-      return false
-    }
-
-    const raw = window.sessionStorage.getItem(`ineedsocial:study:${sessionId}:liked`)
-    if (!raw) {
-      return false
-    }
-
-    try {
-      const likedPosts = JSON.parse(raw) as Record<string, boolean>
-      return Boolean(likedPosts[targetPostId])
-    } catch {
-      return false
-    }
-  }, postId)
-}
-
-async function dismissTutorialIfVisible(page: Page) {
-  const tutorialSkipButton = page.getByTestId("tutorial-skip-button")
-  const tutorialIsVisible = await tutorialSkipButton
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false)
-
-  if (tutorialIsVisible) {
-    await page.getByTestId("tutorial-skip-button").click({ force: true })
-    await page
-      .waitForFunction(() => !document.querySelector('[data-testid="tutorial-skip-button"]'), {
-        timeout: 5_000,
-      })
-      .catch(() => {})
-  }
-}
-
-async function getFeedScrollTop(page: Page) {
-  return page.getByTestId("feed-scroll-container").evaluate((element) => element.scrollTop)
-}
-
-async function setFeedScrollTop(page: Page, top: number) {
-  await page.getByTestId("feed-scroll-container").evaluate((element, nextTop) => {
-    element.scrollTop = nextTop
-    element.dispatchEvent(new Event("scroll"))
-  }, top)
-}
-
-async function waitForFeedScrollTopAtLeast(page: Page, minimumTop: number) {
-  await expect
-    .poll(async () => getFeedScrollTop(page), {
-      message: `Expected feed scrollTop to reach at least ${minimumTop}px`,
-    })
-    .toBeGreaterThan(minimumTop)
-}
+import {
+  getFeedScrollTop,
+  getFirstVisiblePostId,
+  setFeedScrollTop,
+  waitForFeedScrollTopAtLeast,
+  waitForVisibleFeedPost,
+} from "./helpers/feed"
+import {
+  delayFeedResponses,
+  installControllableFeedOverride,
+} from "./helpers/feed-override"
+import {
+  isPostLikedInSession,
+  readSessionSnapshot,
+  seedCompletedTutorialSession,
+  startStudy,
+  sumGenreTimes,
+} from "./helpers/session"
+import { dismissTutorialIfVisible } from "./helpers/tutorial"
 
 async function waitForTrackedTimeToExceed(page: Page, minimumMs = 0) {
   await expect
@@ -140,140 +66,6 @@ async function waitForTrackedTimeToStayAt(page: Page, expectedTotal: number, sta
       stableDuration: stableMs,
     }
   )
-}
-
-async function getFirstVisiblePostId(page: Page) {
-  return page.evaluate(() => {
-    const container = document.querySelector<HTMLElement>('[data-testid="feed-scroll-container"]')
-    if (!container) {
-      return null
-    }
-
-    const containerRect = container.getBoundingClientRect()
-    const posts = container.querySelectorAll<HTMLElement>("[data-regular-post-id]")
-
-    for (const element of posts) {
-      const rect = element.getBoundingClientRect()
-      const isVisible = rect.bottom > containerRect.top && rect.top < containerRect.bottom
-
-      if (isVisible) {
-        return element.getAttribute("data-regular-post-id")
-      }
-    }
-
-    return null
-  })
-}
-
-async function waitForVisibleFeedPost(page: Page) {
-  await expect
-    .poll(async () => getFirstVisiblePostId(page), {
-      message: "Expected at least one feed post to be visible in the viewport",
-    })
-    .not.toBeNull()
-}
-
-async function seedActiveStudySession(page: Page, sessionId: string) {
-  await page.addInitScript((targetSessionId) => {
-    window.sessionStorage.setItem("ineedsocial:study:active-session", targetSessionId)
-  }, sessionId)
-}
-
-async function seedCompletedTutorialSession(page: Page, sessionId: string) {
-  await page.addInitScript((targetSessionId) => {
-    window.sessionStorage.setItem("ineedsocial:study:active-session", targetSessionId)
-    window.sessionStorage.setItem(
-      `ineedsocial:study:${targetSessionId}:tutorial`,
-      JSON.stringify({ completed: true, currentStep: 0 })
-    )
-  }, sessionId)
-}
-
-async function installControllableFeedOverride(
-  page: Page,
-  {
-    initialMode = "malformed",
-    sessionId,
-  }: {
-    initialMode?: FeedOverrideMode
-    sessionId?: string
-  } = {}
-) {
-  await page.addInitScript(
-    ({ startingMode, targetSessionId }) => {
-      if (targetSessionId) {
-        window.sessionStorage.setItem("ineedsocial:study:active-session", targetSessionId)
-      }
-
-      const originalFetch = window.fetch.bind(window)
-      ;(window as Window & { __feedOverrideMode?: FeedOverrideMode }).__feedOverrideMode =
-        startingMode
-
-      window.fetch = async (input, init) => {
-        const requestUrl =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url
-
-        if (
-          (window as Window & { __feedOverrideMode?: FeedOverrideMode }).__feedOverrideMode ===
-            "malformed" &&
-          (requestUrl.includes("/content/feed.json") || requestUrl.includes("/api/feed"))
-        ) {
-          return new Response(JSON.stringify({ posts: "rusak" }), {
-            headers: {
-              "Content-Type": "application/json",
-            },
-            status: 200,
-          })
-        }
-
-        return originalFetch(input, init)
-      }
-    },
-    {
-      startingMode: initialMode,
-      targetSessionId: sessionId ?? null,
-    }
-  )
-
-  return {
-    async setMode(nextMode: FeedOverrideMode) {
-      await page.evaluate((mode) => {
-        ;(window as Window & { __feedOverrideMode?: FeedOverrideMode }).__feedOverrideMode = mode
-      }, nextMode)
-    },
-  }
-}
-
-async function delayFeedResponses(page: Page, delayMs: number) {
-  await page.addInitScript((delay) => {
-    const originalFetch = window.fetch.bind(window)
-
-    window.fetch = async (input, init) => {
-      const requestUrl =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url
-
-      if (requestUrl.includes("/content/feed.json") || requestUrl.includes("/api/feed")) {
-        await new Promise((resolve) => window.setTimeout(resolve, delay))
-      }
-
-      return originalFetch(input, init)
-    }
-  }, delayMs)
-}
-
-async function startStudy(page: Page) {
-  await page.goto("/")
-  await page.waitForURL("**/welcome")
-  await page.getByTestId("start-study-button").click()
-  await page.waitForURL("**/feed?theme=light")
 }
 
 async function seedEndedStudySession(page: Page, sessionId: string) {

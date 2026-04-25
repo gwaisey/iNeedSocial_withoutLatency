@@ -1,36 +1,19 @@
 import {
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type RefObject,
   type SyntheticEvent,
 } from "react"
+import { getResolvedVideoSource, getVideoPosterSource } from "./auto-play-video-config"
 import {
-  getResolvedVideoSource,
-  getVideoPosterSource,
-  isHlsManifestSource,
-  isDirectVideoFileSource,
-  VIDEO_EARLY_LOAD_DISTANCE_PX,
-  VIDEO_SOURCE_DETACH_GRACE_MS,
-  VIDEO_SOURCE_IMMEDIATE_DETACH_DISTANCE_PX,
-} from "./auto-play-video-config"
-import {
-  classifyVideoPlayError,
-  reportVideoLoadIssue,
-  reportVideoPlayIssue,
   useVideoCandidateLifecycle,
   useVideoPrewarmMount,
-  useVideoSourceLifecycleReset,
 } from "./auto-play-video-lifecycle"
-import { syncVideoMutedState, useVideoReadinessState } from "./auto-play-video-readiness"
-import {
-  preloadHlsRuntime,
-  useCloudflareStreamWarmup,
-  useDirectVideoWarmup,
-} from "./auto-play-video-stream-warmup"
-import { getVideoPlaybackDecision } from "./auto-play-video-state"
+import { useVideoReadinessState } from "./auto-play-video-readiness"
+import { useAutoPlayVideoPlayback } from "./auto-play-video-playback"
+import { useAutoPlayVideoSource, type VideoLoadIssueContext } from "./auto-play-video-source"
 import { useMountedVideoViewportState } from "./auto-play-video-viewport"
 
 type AutoPlayVideoProps = {
@@ -48,13 +31,6 @@ type AutoPlayVideoProps = {
   readonly src?: string
   readonly streamDelivery?: "hls" | "mp4"
   readonly streamUid?: string
-}
-
-function canUseNativeHlsPlayback(video: HTMLVideoElement) {
-  return Boolean(
-    video.canPlayType("application/vnd.apple.mpegurl") ||
-      video.canPlayType("application/x-mpegURL")
-  )
 }
 
 export function AutoPlayVideo({
@@ -80,22 +56,17 @@ export function AutoPlayVideo({
   const playbackCandidateId = useId()
   const shellRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const loadIssueContextRef = useRef({
+  const loadIssueContextRef = useRef<VideoLoadIssueContext>({
     distanceToViewport: 0,
     isActive,
     isInViewport: false,
     isMuted,
     isVisible: false,
   })
-  const sourceCleanupRef = useRef<(() => void) | null>(null)
-  const detachSourceTimeoutRef = useRef<number | null>(null)
   const hasPendingPlayAttemptRef = useRef(false)
-  const hasIssuedLoadHintRef = useRef(false)
-  const hasIssuedVisibleLoadHintRef = useRef(false)
-  const shouldAggressivelyLoadSourceRef = useRef(false)
+  const lastReportedLoadIssueRef = useRef<string | null>(null)
+  const lastReportedPlayIssueRef = useRef<string | null>(null)
   const [autoPreloadRank, setAutoPreloadRank] = useState<number | null>(null)
-  const [hasAttachedSource, setHasAttachedSource] = useState(false)
-  const [hasConnectedPlaybackSource, setHasConnectedPlaybackSource] = useState(false)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
   const [shouldMountVideo, setShouldMountVideo] = useState(false)
   const {
@@ -112,24 +83,6 @@ export function AutoPlayVideo({
     scrollRootRef,
     shellRef,
     shouldMountVideo,
-  })
-  const {
-    handleLoadedData,
-    handleLoadedMetadata,
-    handlePosterLoad,
-    hasLoadedFrame,
-    lastReportedLoadIssueRef,
-    lastReportedPlayIssueRef,
-    queueFrameReady,
-    shellAspectRatio,
-  } = useVideoReadinessState({
-    hasVideoSource,
-    isSourceConnected: hasConnectedPlaybackSource,
-    normalizedSrc: resolvedSrc,
-    onLoadedMetadata,
-    posterSrc: resolvedPoster,
-    shouldMountVideo,
-    videoRef,
   })
   const isPlaybackVisible = isVisible || isForwardHandoffCandidate
 
@@ -165,473 +118,67 @@ export function AutoPlayVideo({
     setShouldMountVideo,
     shellRef,
   })
-  useVideoSourceLifecycleReset({
-    normalizedSrc: resolvedSrc,
+  const canUseAutoPreload = autoPreloadRank !== null
+  const {
+    hasAttachedSource,
+    hasConnectedPlaybackSource,
+    shouldAggressivelyLoadSource,
+    shouldRenderVideoSource,
+  } = useAutoPlayVideoSource({
+    autoPreloadRank,
+    canUseAutoPreload,
+    distanceToViewport,
+    hasPendingPlayAttemptRef,
+    hasVideoSource,
+    isInViewport,
+    isNearViewport,
+    isPlaybackVisible,
+    isVisible,
+    lastReportedLoadIssueRef,
+    loadIssueContextRef,
+    preloadDirection,
+    resolvedSrc,
     setAutoPreloadRank,
-    setHasAttachedSource,
     setIsPlaybackOwner,
     setShouldMountVideo,
-    shouldResetViewportDataRef: hasPendingPlayAttemptRef,
-    shouldResetWarmupRef: hasPendingPlayAttemptRef,
-  })
-
-  const canUseAutoPreload = autoPreloadRank !== null
-  const shouldAggressivelyLoadSource =
-    hasVideoSource &&
-    shouldMountVideo &&
-    (isInViewport ||
-      isPlaybackVisible ||
-      (autoPreloadRank !== null && autoPreloadRank <= 1))
-  const shouldKeepAttachedSource =
-    hasAttachedSource &&
-    (isInViewport || isVisible || canUseAutoPreload)
-
-  const shouldRenderVideoSource =
-    hasVideoSource &&
-    shouldMountVideo &&
-    (shouldKeepAttachedSource ||
-      canUseAutoPreload ||
-      isInViewport ||
-      isVisible)
-
-  useLayoutEffect(() => {
-    shouldAggressivelyLoadSourceRef.current = shouldAggressivelyLoadSource
-  }, [shouldAggressivelyLoadSource])
-
-  const shouldWarmCloudflareStream =
-    shouldMountVideo &&
-    isHlsManifestSource(resolvedSrc) &&
-    (canUseAutoPreload || isNearViewport || isInViewport || isVisible)
-  const shouldDeepPrebufferCloudflareStream =
-    autoPreloadRank === 0 &&
-    preloadDirection === "below" &&
-    !isInViewport &&
-    distanceToViewport <= VIDEO_EARLY_LOAD_DISTANCE_PX
-  useCloudflareStreamWarmup({
-    deepPrebuffer: shouldDeepPrebufferCloudflareStream,
-    enabled: shouldWarmCloudflareStream,
-    manifestUrl: resolvedSrc,
-  })
-  useDirectVideoWarmup({
-    enabled:
-      shouldMountVideo &&
-      isDirectVideoFileSource(resolvedSrc) &&
-      (canUseAutoPreload || isNearViewport || isInViewport || isVisible),
-    src: resolvedSrc,
-  })
-
-  useLayoutEffect(() => {
-    if (!shouldRenderVideoSource || hasAttachedSource) {
-      return
-    }
-
-    if (detachSourceTimeoutRef.current !== null) {
-      window.clearTimeout(detachSourceTimeoutRef.current)
-      detachSourceTimeoutRef.current = null
-    }
-    setHasAttachedSource(true)
-  }, [hasAttachedSource, shouldRenderVideoSource])
-
-  useEffect(() => {
-    const clearScheduledSourceDetach = () => {
-      if (detachSourceTimeoutRef.current === null) {
-        return
-      }
-
-      window.clearTimeout(detachSourceTimeoutRef.current)
-      detachSourceTimeoutRef.current = null
-    }
-
-    const detachPlaybackSource = () => {
-      clearScheduledSourceDetach()
-      hasPendingPlayAttemptRef.current = false
-      hasIssuedLoadHintRef.current = false
-      hasIssuedVisibleLoadHintRef.current = false
-      sourceCleanupRef.current?.()
-      sourceCleanupRef.current = null
-      setHasConnectedPlaybackSource(false)
-      setHasAttachedSource(false)
-    }
-
-    if (shouldRenderVideoSource) {
-      clearScheduledSourceDetach()
-      return
-    }
-
-    if (!hasAttachedSource) {
-      return
-    }
-
-    const shouldDetachImmediately =
-      !hasVideoSource ||
-      !shouldMountVideo ||
-      (Number.isFinite(distanceToViewport) &&
-        distanceToViewport >= VIDEO_SOURCE_IMMEDIATE_DETACH_DISTANCE_PX)
-
-    if (shouldDetachImmediately) {
-      detachPlaybackSource()
-      return
-    }
-
-    if (detachSourceTimeoutRef.current !== null) {
-      return
-    }
-
-    detachSourceTimeoutRef.current = window.setTimeout(() => {
-      detachSourceTimeoutRef.current = null
-      detachPlaybackSource()
-    }, VIDEO_SOURCE_DETACH_GRACE_MS)
-  }, [
-    distanceToViewport,
-    hasAttachedSource,
-    hasVideoSource,
     shouldMountVideo,
-    shouldRenderVideoSource,
-  ])
-
-  useEffect(() => {
-    if (detachSourceTimeoutRef.current !== null) {
-      window.clearTimeout(detachSourceTimeoutRef.current)
-      detachSourceTimeoutRef.current = null
-    }
-    sourceCleanupRef.current?.()
-    sourceCleanupRef.current = null
-    setHasConnectedPlaybackSource(false)
-  }, [resolvedSrc])
-
-  useEffect(() => {
-    hasIssuedLoadHintRef.current = false
-    hasIssuedVisibleLoadHintRef.current = false
-  }, [resolvedSrc])
-
-  useEffect(() => {
-    return () => {
-      if (detachSourceTimeoutRef.current !== null) {
-        window.clearTimeout(detachSourceTimeoutRef.current)
-        detachSourceTimeoutRef.current = null
-      }
-      sourceCleanupRef.current?.()
-      sourceCleanupRef.current = null
-    }
-  }, [])
-
-  useLayoutEffect(() => {
-    const video = videoRef.current
-    if (!video || !resolvedSrc || !hasAttachedSource) {
-      return
-    }
-
-    let cancelled = false
-
-    const bindDirectSource = () => {
-      const shouldAutoLoadNow = shouldAggressivelyLoadSourceRef.current
-      hasIssuedVisibleLoadHintRef.current = false
-      video.preload = shouldAutoLoadNow ? "auto" : "metadata"
-      video.src = resolvedSrc
-      if (
-        isDirectVideoFileSource(resolvedSrc) &&
-        shouldAutoLoadNow &&
-        video.readyState === 0
-      ) {
-        hasIssuedLoadHintRef.current = true
-        try {
-          video.load()
-        } catch {
-          // Ignore browsers that disallow load() in certain lifecycle moments.
-        }
-      }
-      setHasConnectedPlaybackSource(true)
-      sourceCleanupRef.current = () => {
-        video.pause()
-        video.removeAttribute("src")
-        try {
-          video.load()
-        } catch {
-          // Ignore browsers that complain about detaching the current source.
-        }
-      }
-    }
-
-    sourceCleanupRef.current?.()
-    sourceCleanupRef.current = null
-    setHasConnectedPlaybackSource(false)
-
-    if (!isHlsManifestSource(resolvedSrc) || canUseNativeHlsPlayback(video)) {
-      bindDirectSource()
-    } else {
-      void preloadHlsRuntime()
-        .then(({ default: Hls }) => {
-          if (cancelled) {
-            return
-          }
-
-          if (!Hls.isSupported()) {
-            const context = loadIssueContextRef.current
-            reportVideoLoadIssue({
-              distanceToViewport: context.distanceToViewport,
-              error: new Error("HLS playback is not supported by this browser."),
-              isActive: context.isActive,
-              isInViewport: context.isInViewport,
-              isMuted: context.isMuted,
-              isVisible: context.isVisible,
-              lastReportedIssueRef: lastReportedLoadIssueRef,
-              src: resolvedSrc,
-              stage: context.isVisible
-                ? "viewport"
-                : context.isInViewport
-                  ? "near-viewport"
-                  : "prewarm",
-            })
-            return
-          }
-
-          const hls = new Hls()
-          hls.loadSource(resolvedSrc)
-          hls.attachMedia(video)
-
-          setHasConnectedPlaybackSource(true)
-          sourceCleanupRef.current = () => {
-            hls.destroy()
-            video.pause()
-            video.removeAttribute("src")
-            try {
-              video.load()
-            } catch {
-              // Ignore browsers that complain while clearing the detached media element.
-            }
-          }
-        })
-        .catch((error: unknown) => {
-          if (cancelled) {
-            return
-          }
-
-          const context = loadIssueContextRef.current
-          reportVideoLoadIssue({
-            distanceToViewport: context.distanceToViewport,
-            error,
-            isActive: context.isActive,
-            isInViewport: context.isInViewport,
-            isMuted: context.isMuted,
-            isVisible: context.isVisible,
-            lastReportedIssueRef: lastReportedLoadIssueRef,
-            src: resolvedSrc,
-            stage: context.isVisible
-              ? "viewport"
-              : context.isInViewport
-                ? "near-viewport"
-                : "prewarm",
-          })
-        })
-    }
-
-    return () => {
-      cancelled = true
-      setHasConnectedPlaybackSource(false)
-      sourceCleanupRef.current?.()
-      sourceCleanupRef.current = null
-    }
-  }, [
-    hasAttachedSource,
-    lastReportedLoadIssueRef,
-    resolvedSrc,
-  ])
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (
-      !video ||
-      !hasVideoSource ||
-      !hasConnectedPlaybackSource ||
-      !shouldMountVideo ||
-      !hasAttachedSource ||
-      hasIssuedLoadHintRef.current
-    ) {
-      return
-    }
-
-    // Nudge the browser to start fetching bytes for the current or immediate next
-    // playback candidate. Avoid auto-loading several offscreen videos at once because
-    // browser media connection limits can delay the video the user reaches next.
-    if (
-      (autoPreloadRank === null || autoPreloadRank > 1) &&
-      !isPlaybackVisible &&
-      !isInViewport
-    ) {
-      return
-    }
-
-    if (!isDirectVideoFileSource(resolvedSrc)) {
-      return
-    }
-
-    if (!video.paused || video.currentTime > 0) {
-      return
-    }
-
-    if (video.readyState > 0) {
-      return
-    }
-
-    hasIssuedLoadHintRef.current = true
-    video.preload = "auto"
-    try {
-      video.load()
-    } catch {
-      // Ignore browsers that disallow load() in certain lifecycle moments.
-    }
-  }, [
-    autoPreloadRank,
-    hasAttachedSource,
-    hasConnectedPlaybackSource,
-    hasVideoSource,
-    isInViewport,
-    isPlaybackVisible,
-    resolvedSrc,
-    shouldMountVideo,
-  ])
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (
-      !video ||
-      !hasVideoSource ||
-      !hasConnectedPlaybackSource ||
-      !hasAttachedSource ||
-      !isDirectVideoFileSource(resolvedSrc) ||
-      hasIssuedVisibleLoadHintRef.current ||
-      hasPendingPlayAttemptRef.current ||
-      !video.paused ||
-      video.readyState > 0 ||
-      (!isPlaybackVisible && !isInViewport)
-    ) {
-      return
-    }
-
-    hasIssuedVisibleLoadHintRef.current = true
-    video.preload = "auto"
-    try {
-      video.load()
-    } catch {
-      // Ignore browsers that disallow load() during a visibility transition.
-    }
-  }, [
-    hasAttachedSource,
-    hasConnectedPlaybackSource,
-    hasVideoSource,
-    isInViewport,
-    isPlaybackVisible,
-    resolvedSrc,
-  ])
-
-  const shouldAutoplayVisibleVideo =
-    isMuted && isActive && isPlaybackOwner && isPlaybackVisible && hasConnectedPlaybackSource
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) {
-      return
-    }
-
-    syncVideoMutedState(video, isMuted)
-  }, [isMuted])
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video || !hasAttachedSource) {
-      return
-    }
-
-    const playbackDecision = getVideoPlaybackDecision({
-      currentTime: video.currentTime,
-      distanceToViewport,
-      isActive,
-      isInViewport,
-      isPlaybackOwner,
-      isPaused: video.paused,
-      isVisible: isPlaybackVisible,
-    })
-
-    if (playbackDecision.shouldPause) {
-      hasPendingPlayAttemptRef.current = false
-      video.pause()
-    }
-
-    if (playbackDecision.shouldReset) {
-      try {
-        video.currentTime = 0
-      } catch {
-        // Ignore browsers that disallow currentTime changes before metadata loads.
-      }
-    }
-
-    if (!hasConnectedPlaybackSource || !playbackDecision.shouldPlay || !video.paused) {
-      return
-    }
-
-    if (hasPendingPlayAttemptRef.current) {
-      return
-    }
-
-    const shouldStartMuted = !isMuted
-    if (shouldStartMuted) {
-      video.defaultMuted = true
-      video.muted = true
-      video.volume = 0
-    }
-
-    hasPendingPlayAttemptRef.current = true
-    const playPromise = video.play()
-    if (!playPromise || typeof playPromise.then !== "function") {
-      hasPendingPlayAttemptRef.current = false
-      return
-    }
-
-    void playPromise
-      .then(() => {
-        hasPendingPlayAttemptRef.current = false
-        if (!hasLoadedFrame) {
-          queueFrameReady(video)
-        }
-
-        if (!shouldStartMuted) {
-          return
-        }
-
-        syncVideoMutedState(video, isMuted)
-      })
-      .catch((error) => {
-        hasPendingPlayAttemptRef.current = false
-        reportVideoPlayIssue({
-          classification: classifyVideoPlayError(error),
-          distanceToViewport,
-          error,
-          isActive,
-          isInViewport,
-          isMuted,
-          isVisible,
-          lastReportedIssueRef: lastReportedPlayIssueRef,
-          src: resolvedSrc,
-        })
-      })
-  }, [
-    distanceToViewport,
+    videoRef,
+  })
+  const {
+    handleLoadedData,
+    handleLoadedMetadata,
+    handlePosterLoad,
     hasLoadedFrame,
+    queueFrameReady,
+    shellAspectRatio,
+  } = useVideoReadinessState({
     hasVideoSource,
+    isSourceConnected: hasConnectedPlaybackSource,
+    lastReportedLoadIssueRef,
+    lastReportedPlayIssueRef,
+    normalizedSrc: resolvedSrc,
+    onLoadedMetadata,
+    posterSrc: resolvedPoster,
+    shouldMountVideo,
+    videoRef,
+  })
+  const { shouldAutoplayVisibleVideo } = useAutoPlayVideoPlayback({
+    distanceToViewport,
+    hasAttachedSource,
+    hasConnectedPlaybackSource,
+    hasLoadedFrame,
+    hasPendingPlayAttemptRef,
     isActive,
-    isForwardHandoffCandidate,
     isInViewport,
     isMuted,
     isPlaybackOwner,
+    isPlaybackVisible,
     isVisible,
     lastReportedPlayIssueRef,
-    resolvedSrc,
     queueFrameReady,
-    hasConnectedPlaybackSource,
-    shouldRenderVideoSource,
-    hasAttachedSource,
-    isPlaybackVisible,
-  ])
+    resolvedSrc,
+    videoRef,
+  })
 
   return (
     <div
