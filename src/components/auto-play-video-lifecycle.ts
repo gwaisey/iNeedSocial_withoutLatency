@@ -8,6 +8,7 @@ import {
   type SetStateAction,
 } from "react"
 import { reportRuntimeIssue } from "../utils/runtime-monitoring"
+import { getFeedScrollRoot } from "../utils/feed-scroll-container"
 import {
   registerVideoPreloadCandidate,
   type VideoPreloadRank,
@@ -273,7 +274,10 @@ export function useVideoPrewarmMount({
     const shell = shellRef.current
     if (
       !shell ||
-      !isInsidePrewarmWindow(shell.getBoundingClientRect(), scrollRootRef?.current ?? null)
+      !isInsidePrewarmWindow(
+        shell.getBoundingClientRect(),
+        getFeedScrollRoot(scrollRootRef?.current ?? null)
+      )
     ) {
       return
     }
@@ -298,7 +302,7 @@ export function useVideoPrewarmMount({
         }
       },
       {
-        root: scrollRootRef?.current ?? null,
+        root: getFeedScrollRoot(scrollRootRef?.current ?? null),
         rootMargin: VIDEO_PRELOAD_ROOT_MARGIN,
         threshold: 0,
       }

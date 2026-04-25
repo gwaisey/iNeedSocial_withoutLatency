@@ -4,6 +4,10 @@ import {
   type VideoPreloadDirection,
 } from "../utils/video-preload-budget"
 import {
+  getFeedScrollRoot,
+  getFeedScrollTop,
+} from "../utils/feed-scroll-container"
+import {
   VIDEO_EARLY_LOAD_DISTANCE_PX,
   VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS,
 } from "./auto-play-video-config"
@@ -55,11 +59,7 @@ function getViewportPreloadDirection(
 }
 
 function getRootScrollOffset(root: HTMLElement | null) {
-  if (root) {
-    return root.scrollTop
-  }
-
-  return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+  return getFeedScrollTop(root)
 }
 
 const viewportSubscribers = new Set<ViewportSubscriber>()
@@ -143,7 +143,7 @@ export function useMountedVideoViewportState({
     }
 
     const updateViewportState = () => {
-      const root = scrollRootRef?.current ?? null
+      const root = getFeedScrollRoot(scrollRootRef?.current ?? null)
       const { top: rootTop, bottom: rootBottom } = getViewportBounds(root)
       const scrollOffset = getRootScrollOffset(root)
       const previousScrollOffset = lastScrollOffsetRef.current
@@ -201,7 +201,7 @@ export function useMountedVideoViewportState({
     const intersectionObserver = new IntersectionObserver(() => {
       updateViewportState()
     }, {
-      root: scrollRootRef?.current ?? null,
+      root: getFeedScrollRoot(scrollRootRef?.current ?? null),
       threshold: VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS,
     })
 
