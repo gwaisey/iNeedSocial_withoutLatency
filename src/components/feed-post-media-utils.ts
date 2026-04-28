@@ -12,7 +12,14 @@ export type MediaSurfaceTokens = {
 }
 
 export function isVideoMedia(media?: Pick<MediaItem, "src" | "streamUid">) {
-  return Boolean(media?.streamUid?.trim()) || isDirectVideoFileSource(media?.src)
+  const hasStreamUid = Boolean(media?.streamUid?.trim())
+  const hasVideoExtension = isDirectVideoFileSource(media?.src)
+  
+  // Jika ada streamUid, ini pasti video Cloudflare Stream
+  if (hasStreamUid) return true
+  
+  // Jika link-nya mengandung /videos/ atau .mp4, ini video lokal/Appwrite
+  return hasVideoExtension || (media?.src?.includes("/videos/") ?? false)
 }
 
 export function getMediaSurfaceTokens(isDark: boolean): MediaSurfaceTokens {
