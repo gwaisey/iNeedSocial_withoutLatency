@@ -641,7 +641,7 @@ export function AutoPlayVideo({
     >
       {!hasLoadedFrame && (
         <div
-          className={`absolute inset-0 ${shouldMountVideo ? "" : "skeleton"} ${skeletonClassName} ${placeholderClassName}`}
+          className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`}
         />
       )}
       {resolvedPoster && !hasLoadedFrame && (

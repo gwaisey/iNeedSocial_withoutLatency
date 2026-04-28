@@ -35,8 +35,21 @@ function buildAspectRatio(width: number, height: number) {
   return `${width} / ${height}`
 }
 
+const APPWRITE_BUCKET_ID = "69f06d7d001ead36760b"
+const APPWRITE_PROJECT_ID = "69f06d28001a59694572"
+
 export function getNormalizedVideoSource(src?: string) {
-  const normalizedSrc = src?.trim()
+  let normalizedSrc = src?.trim()
+  
+  if (normalizedSrc?.startsWith("/content/videos/")) {
+    // Ambil nama file tanpa folder dan tanpa ekstensi .mp4
+    // Contoh: /content/videos/pinata.mp4 -> pinata
+    const fileId = normalizedSrc.split("/").pop()?.replace(".mp4", "")
+    if (fileId) {
+      normalizedSrc = `https://sgp.cloud.appwrite.io/v1/storage/buckets/${APPWRITE_BUCKET_ID}/files/${fileId}/view?project=${APPWRITE_PROJECT_ID}`
+    }
+  }
+  
   return normalizedSrc ? normalizedSrc : undefined
 }
 
@@ -105,11 +118,18 @@ export function getResolvedVideoSource(
   streamUid?: string,
   streamDelivery: "hls" | "mp4" = "mp4"
 ) {
-  if (streamDelivery === "mp4") {
-    return getCloudflareStreamDownloadUrl(streamUid) ?? getNormalizedVideoSource(src)
+  const normalizedDirectSrc = getNormalizedVideoSource(src)
+  
+  // Prioritize R2 direct source if available to avoid Cloudflare Stream costs
+  if (normalizedDirectSrc?.startsWith("http")) {
+    return normalizedDirectSrc
   }
 
-  return getCloudflareStreamManifestUrl(streamUid) ?? getNormalizedVideoSource(src)
+  if (streamDelivery === "mp4") {
+    return getCloudflareStreamDownloadUrl(streamUid) ?? normalizedDirectSrc
+  }
+
+  return getCloudflareStreamManifestUrl(streamUid) ?? normalizedDirectSrc
 }
 
 export function getVideoPosterSource(src?: string, poster?: string, streamUid?: string) {
