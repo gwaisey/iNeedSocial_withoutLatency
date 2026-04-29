@@ -248,7 +248,7 @@ describe("video preload budget", () => {
     })
     updateVideoPreloadCandidate("far", {
       canPrewarm: true,
-      distancePx: 12_600,
+      distancePx: 14_600,
       direction: "below",
     })
 
