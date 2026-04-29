@@ -272,7 +272,7 @@ describe("auto-play video state", () => {
 
     expect(
       shouldEarlyLoadNearViewport({
-        distanceToViewport: 5_400,
+        distanceToViewport: 7_400,
         hasLoadedFrame: false,
         isActive: true,
         readyState: 0,

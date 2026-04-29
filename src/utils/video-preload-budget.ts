@@ -8,11 +8,11 @@ type VideoPreloadCandidate = {
   notify: (preloadRank: VideoPreloadRank) => void
 }
 
-// Keep aggressive auto-preloading focused on the immediate upcoming videos. Letting
-// too many Cloudflare MP4 redirects download at once can starve the next focused video.
-const MAX_AUTO_PRELOAD_VIDEOS = 3
+// Keep auto-preloading focused on nearby videos while giving fast mobile scrolls
+// enough runway in both directions.
+const MAX_AUTO_PRELOAD_VIDEOS = 4
 const MAX_BELOW_PRELOAD_DISTANCE_PX = 12000
-const MAX_ABOVE_PRELOAD_DISTANCE_PX = 5200
+const MAX_ABOVE_PRELOAD_DISTANCE_PX = 12000
 const registry = new Map<string, VideoPreloadCandidate>()
 let preferredPreloadDirection: Exclude<VideoPreloadDirection, "visible"> = "below"
 

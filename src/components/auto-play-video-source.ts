@@ -15,6 +15,7 @@ import type {
 import {
   isDirectVideoFileSource,
   isHlsManifestSource,
+  VIDEO_AGGRESSIVE_AUTO_LOAD_MAX_RANK,
   VIDEO_EARLY_LOAD_DISTANCE_PX,
   VIDEO_SOURCE_DETACH_GRACE_MS,
   VIDEO_SOURCE_IMMEDIATE_DETACH_DISTANCE_PX,
@@ -108,7 +109,7 @@ export function useAutoPlayVideoSource({
     shouldMountVideo &&
     (isInViewport ||
       isPlaybackVisible ||
-      (autoPreloadRank !== null && autoPreloadRank <= 1))
+      (autoPreloadRank !== null && autoPreloadRank <= VIDEO_AGGRESSIVE_AUTO_LOAD_MAX_RANK))
   const shouldKeepAttachedSource =
     hasAttachedSource &&
     (isInViewport || isVisible || canUseAutoPreload)
@@ -384,7 +385,7 @@ export function useAutoPlayVideoSource({
     // playback candidate. Avoid auto-loading several offscreen videos at once because
     // browser media connection limits can delay the video the user reaches next.
     if (
-      (autoPreloadRank === null || autoPreloadRank > 1) &&
+      (autoPreloadRank === null || autoPreloadRank > VIDEO_AGGRESSIVE_AUTO_LOAD_MAX_RANK) &&
       !isPlaybackVisible &&
       !isInViewport
     ) {

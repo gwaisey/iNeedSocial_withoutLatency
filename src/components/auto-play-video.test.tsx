@@ -490,7 +490,7 @@ describe("AutoPlayVideo", () => {
     })
   })
 
-  it("keeps an offscreen source attached briefly before unloading it", async () => {
+  it("keeps nearby offscreen sources attached and unloads them after they are far away", async () => {
     HTMLMediaElement.prototype.play = vi.fn(() => new Promise<void>(() => {}))
 
     let rect = {
@@ -561,6 +561,27 @@ describe("AutoPlayVideo", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(1)
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
+
+    rect = {
+      bottom: -15_000,
+      height: 600,
+      left: 0,
+      right: 480,
+      toJSON: () => ({}),
+      top: -15_600,
+      width: 480,
+      x: 0,
+      y: -15_600,
+    } as DOMRect
+
+    fireEvent.scroll(document)
+
+    await act(async () => {
+      flushAnimationFrames()
       await Promise.resolve()
     })
 
