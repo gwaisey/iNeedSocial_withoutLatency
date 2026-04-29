@@ -371,7 +371,7 @@ describe("AutoPlayVideo", () => {
     expect(hlsAttachMediaSpy).toHaveBeenCalledWith(container.querySelector("video"))
   })
 
-  it("handles interrupted autoplay promises without leaking an unhandled rejection", async () => {
+  it("ignores interrupted autoplay promises without leaking an unhandled rejection", async () => {
     const autoplayError = new Error("The play() request was interrupted by a call to pause().")
     autoplayError.name = "AbortError"
     HTMLMediaElement.prototype.play = vi.fn().mockRejectedValue(autoplayError)
@@ -397,19 +397,10 @@ describe("AutoPlayVideo", () => {
     })
 
     await waitFor(() => {
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "[monitoring:video-playback] Video autoplay was blocked or interrupted.",
-        expect.objectContaining({
-          error: expect.objectContaining({
-            name: "AbortError",
-          }),
-          metadata: expect.objectContaining({
-            classification: "interrupted",
-            stage: "autoplay",
-          }),
-        })
-      )
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
     })
+
+    expect(consoleWarnSpy).not.toHaveBeenCalled()
   })
 
   it("warms Cloudflare Stream playback with preconnect links and a manifest fetch", async () => {

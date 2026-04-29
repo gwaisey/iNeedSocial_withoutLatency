@@ -132,6 +132,10 @@ export function reportVideoPlayIssue({
   readonly lastReportedIssueRef: MutableRefObject<string | null>
   readonly src?: string
 }) {
+  if (classification === "interrupted") {
+    return
+  }
+
   const signature =
     `${classification}:${error instanceof Error ? `${error.name}:${error.message}` : String(error)}`
   if (lastReportedIssueRef.current === signature) {

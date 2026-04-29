@@ -52,7 +52,10 @@ export async function waitForVisibleFeedPost(page: Page) {
 
 export async function scrollPostIntoView(page: Page, postId: string) {
   const post = page.locator(`[data-regular-post-id="${postId}"]`)
-  await post.scrollIntoViewIfNeeded()
+  await expect(post).toBeAttached()
+  await post.evaluate((element) => {
+    element.scrollIntoView({ block: "center", inline: "nearest" })
+  })
   await expect(post).toBeVisible()
 }
 
