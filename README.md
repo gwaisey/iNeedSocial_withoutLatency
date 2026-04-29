@@ -70,6 +70,9 @@ Salin `.env.example` menjadi `.env` untuk pengembangan lokal. Untuk deployment p
 
 ```bash
 VITE_FEED_SOURCE=mock
+VITE_APPWRITE_ENDPOINT=https://sgp.cloud.appwrite.io/v1
+VITE_APPWRITE_PROJECT_ID=69f06d28001a59694572
+VITE_APPWRITE_BUCKET_ID=69f06d7d001ead36760b
 VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE=
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
@@ -82,9 +85,11 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 
 Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`. Route `/api/feed` tidak disediakan di repo ini, sehingga mode `api` tetap membutuhkan backend eksternal.
 
-`VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE` bersifat opsional. Jika diisi, media video yang memiliki `streamUid` di feed akan diputar dari Cloudflare Stream dengan fallback ke MP4 lokal bila kode customer tidak tersedia.
+`VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, dan `VITE_APPWRITE_BUCKET_ID` mengarahkan video feed ke Appwrite Storage. Nilai bawaan sudah sesuai dengan storage publik proyek saat ini, tetapi tetap didokumentasikan agar konfigurasi produksi eksplisit.
 
-Jika dua variabel frontend di atas belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Status penyimpanan sesi akan tetap ditampilkan secara non-blocking di halaman terima kasih.
+`VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE` bersifat opsional dan hanya dipertahankan sebagai fallback legacy untuk media yang memiliki `streamUid`. Jika video Appwrite tersedia, aplikasi akan memprioritaskan sumber MP4 langsung dari Appwrite.
+
+Jika variabel Supabase frontend belum diisi atau tidak valid, aplikasi tetap bisa berjalan. Status penyimpanan sesi akan tetap ditampilkan secara non-blocking di halaman terima kasih.
 
 ### Variabel privat untuk ekspor admin / server
 

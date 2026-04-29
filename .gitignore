@@ -13,3 +13,8 @@ test-results/
 playwright-report/
 tmp/
 Laporan_Semua_Sesi_*.xlsx
+Capture.PNG
+mobile.PNG
+supabase/.temp/
+public/.htaccess
+public/index.php

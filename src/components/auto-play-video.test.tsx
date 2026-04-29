@@ -357,7 +357,6 @@ describe("AutoPlayVideo", () => {
       <AutoPlayVideo
         className="video"
         isMuted={true}
-        src="/content/videos/pinata.mp4"
         streamDelivery="hls"
         streamUid="dad0deb02906401e5950bfe6816fb4a4"
       />
@@ -424,7 +423,6 @@ describe("AutoPlayVideo", () => {
       <AutoPlayVideo
         className="video"
         isMuted={true}
-        src="/content/videos/pinata.mp4"
         streamDelivery="hls"
         streamUid="dad0deb02906401e5950bfe6816fb4a4"
       />
@@ -484,10 +482,11 @@ describe("AutoPlayVideo", () => {
       expect(container.querySelector("video")).not.toBeNull()
     })
 
+    const appwritePinataUrl =
+      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f06d7d001ead36760b/files/pinata/view?project=69f06d28001a59694572"
+
     await waitFor(() => {
-      expect(container.querySelector("video")?.getAttribute("src")).toBe(
-        "/content/videos/pinata.mp4"
-      )
+      expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
     })
   })
 
@@ -523,10 +522,11 @@ describe("AutoPlayVideo", () => {
       <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
     )
 
+    const appwritePinataUrl =
+      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f06d7d001ead36760b/files/pinata/view?project=69f06d28001a59694572"
+
     await waitFor(() => {
-      expect(container.querySelector("video")?.getAttribute("src")).toBe(
-        "/content/videos/pinata.mp4"
-      )
+      expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
     })
 
     vi.useFakeTimers()
@@ -550,18 +550,14 @@ describe("AutoPlayVideo", () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector("video")?.getAttribute("src")).toBe(
-      "/content/videos/pinata.mp4"
-    )
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
 
     await act(async () => {
       vi.advanceTimersByTime(4_499)
       await Promise.resolve()
     })
 
-    expect(container.querySelector("video")?.getAttribute("src")).toBe(
-      "/content/videos/pinata.mp4"
-    )
+    expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
 
     await act(async () => {
       vi.advanceTimersByTime(1)

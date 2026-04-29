@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  getAppwriteStorageOrigin,
+  getAppwriteVideoSource,
   getCloudflareStreamDownloadUrl,
   getCloudflareStreamManifestUrl,
   getCloudflareStreamOrigin,
   getKnownVideoAspectRatio,
   getResolvedVideoSource,
   getVideoPosterSource,
+  isDirectVideoFileSource,
 } from "./auto-play-video-config"
 
 describe("auto-play video config", () => {
@@ -25,7 +28,17 @@ describe("auto-play video config", () => {
     expect(getVideoPosterSource("/content/files/photo.jpg")).toBeUndefined()
   })
 
-  it("resolves Cloudflare Stream playback urls when the customer code and stream uid exist", () => {
+  it("maps local video references to Appwrite direct storage URLs", () => {
+    const appwritePinataUrl =
+      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f06d7d001ead36760b/files/pinata/view?project=69f06d28001a59694572"
+
+    expect(getAppwriteStorageOrigin()).toBe("https://sgp.cloud.appwrite.io")
+    expect(getAppwriteVideoSource("/content/videos/pinata.mp4")).toBe(appwritePinataUrl)
+    expect(getResolvedVideoSource("/content/videos/pinata.mp4")).toBe(appwritePinataUrl)
+    expect(isDirectVideoFileSource(appwritePinataUrl)).toBe(true)
+  })
+
+  it("keeps Cloudflare Stream URL helpers as a legacy fallback", () => {
     vi.stubEnv("VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE", "mjiwvs3h8hhcy2t8")
 
     expect(getCloudflareStreamManifestUrl("dad0deb02906401e5950bfe6816fb4a4")).toBe(
@@ -36,20 +49,12 @@ describe("auto-play video config", () => {
     )
     expect(getCloudflareStreamOrigin()).toBe("https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com")
     expect(
-      getResolvedVideoSource(
-        "/content/videos/pinata.mp4",
-        "dad0deb02906401e5950bfe6816fb4a4",
-        "mp4"
-      )
+      getResolvedVideoSource(undefined, "dad0deb02906401e5950bfe6816fb4a4", "mp4")
     ).toBe(
       "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/downloads/default.mp4"
     )
     expect(
-      getResolvedVideoSource(
-        "/content/videos/pinata.mp4",
-        "dad0deb02906401e5950bfe6816fb4a4",
-        "hls"
-      )
+      getResolvedVideoSource(undefined, "dad0deb02906401e5950bfe6816fb4a4", "hls")
     ).toBe(
       "https://customer-mjiwvs3h8hhcy2t8.cloudflarestream.com/dad0deb02906401e5950bfe6816fb4a4/manifest/video.m3u8"
     )
@@ -58,7 +63,28 @@ describe("auto-play video config", () => {
     ).toBe(
       "/content/video-posters/pinata.jpg"
     )
-    expect(getResolvedVideoSource("/content/videos/pinata.mp4")).toBe("/content/videos/pinata.mp4")
+  })
+
+  it("prefers Appwrite direct video sources over Cloudflare Stream fallbacks", () => {
+    vi.stubEnv("VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE", "mjiwvs3h8hhcy2t8")
+
+    const appwritePinataUrl =
+      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f06d7d001ead36760b/files/pinata/view?project=69f06d28001a59694572"
+
+    expect(
+      getResolvedVideoSource(
+        "/content/videos/pinata.mp4",
+        "dad0deb02906401e5950bfe6816fb4a4",
+        "mp4"
+      )
+    ).toBe(appwritePinataUrl)
+    expect(
+      getResolvedVideoSource(
+        "/content/videos/pinata.mp4",
+        "dad0deb02906401e5950bfe6816fb4a4",
+        "hls"
+      )
+    ).toBe(appwritePinataUrl)
   })
 
   it("derives a stable aspect ratio from known poster dimensions", () => {

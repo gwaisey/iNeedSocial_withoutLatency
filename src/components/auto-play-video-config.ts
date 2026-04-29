@@ -21,10 +21,28 @@ export const VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS = [
 ]
 
 const learnedVideoAspectRatios = new Map<string, string>()
+const DEFAULT_APPWRITE_BUCKET_ID = "69f06d7d001ead36760b"
+const DEFAULT_APPWRITE_ENDPOINT = "https://sgp.cloud.appwrite.io/v1"
+const DEFAULT_APPWRITE_PROJECT_ID = "69f06d28001a59694572"
 
 function getCloudflareStreamCustomerCode() {
   const customerCode = import.meta.env.VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE?.trim()
   return customerCode ? customerCode : undefined
+}
+
+function getAppwriteBucketId() {
+  const bucketId = import.meta.env.VITE_APPWRITE_BUCKET_ID?.trim()
+  return bucketId || DEFAULT_APPWRITE_BUCKET_ID
+}
+
+function getAppwriteEndpoint() {
+  const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT?.trim()
+  return (endpoint || DEFAULT_APPWRITE_ENDPOINT).replace(/\/$/, "")
+}
+
+function getAppwriteProjectId() {
+  const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID?.trim()
+  return projectId || DEFAULT_APPWRITE_PROJECT_ID
 }
 
 function buildAspectRatio(width: number, height: number) {
@@ -35,26 +53,48 @@ function buildAspectRatio(width: number, height: number) {
   return `${width} / ${height}`
 }
 
-const APPWRITE_BUCKET_ID = "69f06d7d001ead36760b"
-const APPWRITE_PROJECT_ID = "69f06d28001a59694572"
-
 export function getNormalizedVideoSource(src?: string) {
   let normalizedSrc = src?.trim()
-  
-  if (normalizedSrc?.startsWith("/content/videos/")) {
-    // Ambil nama file tanpa folder dan tanpa ekstensi .mp4
-    // Contoh: /content/videos/pinata.mp4 -> pinata
-    const fileId = normalizedSrc.split("/").pop()?.replace(".mp4", "")
-    if (fileId) {
-      normalizedSrc = `https://sgp.cloud.appwrite.io/v1/storage/buckets/${APPWRITE_BUCKET_ID}/files/${fileId}/view?project=${APPWRITE_PROJECT_ID}`
-    }
+
+  const appwriteSrc = getAppwriteVideoSource(normalizedSrc)
+  if (appwriteSrc) {
+    normalizedSrc = appwriteSrc
   }
-  
+
   return normalizedSrc ? normalizedSrc : undefined
 }
 
+export function getAppwriteStorageOrigin() {
+  try {
+    return new URL(getAppwriteEndpoint()).origin
+  } catch {
+    return undefined
+  }
+}
+
+export function getAppwriteVideoSource(src?: string) {
+  const normalizedSrc = src?.trim()
+  if (!normalizedSrc?.startsWith("/content/videos/")) {
+    return undefined
+  }
+
+  const filename = normalizedSrc.split("/").pop()
+  const fileId = filename?.replace(/\.mp4$/i, "")
+  if (!fileId) {
+    return undefined
+  }
+
+  return `${getAppwriteEndpoint()}/storage/buckets/${getAppwriteBucketId()}/files/${encodeURIComponent(
+    fileId
+  )}/view?project=${encodeURIComponent(getAppwriteProjectId())}`
+}
+
+export function isAppwriteStorageViewSource(src?: string) {
+  return /\/storage\/buckets\/[^/]+\/files\/[^/]+\/view($|\?)/i.test(src ?? "")
+}
+
 export function isDirectVideoFileSource(src?: string) {
-  return /\.mp4($|\?)/i.test(src ?? "")
+  return /\.mp4($|\?)/i.test(src ?? "") || isAppwriteStorageViewSource(src)
 }
 
 export function isHlsManifestSource(src?: string) {
@@ -119,8 +159,8 @@ export function getResolvedVideoSource(
   streamDelivery: "hls" | "mp4" = "mp4"
 ) {
   const normalizedDirectSrc = getNormalizedVideoSource(src)
-  
-  // Prioritize R2 direct source if available to avoid Cloudflare Stream costs
+
+  // Prefer the configured object-storage MP4 source to avoid Cloudflare Stream costs.
   if (normalizedDirectSrc?.startsWith("http")) {
     return normalizedDirectSrc
   }

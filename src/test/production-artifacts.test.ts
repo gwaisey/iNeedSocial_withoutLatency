@@ -16,6 +16,8 @@ describe("production artifacts", () => {
     const robotsTxt = readRepoFile("public", "robots.txt")
 
     expect(indexHtml).toContain('name="robots" content="noindex, nofollow"')
+    expect(indexHtml).toContain("https://sgp.cloud.appwrite.io")
+    expect(indexHtml).not.toContain("r2.dev")
     expect(indexHtml).not.toContain("Grace")
     expect(robotsTxt).toContain("User-agent: *")
     expect(robotsTxt).toContain("Disallow: /")
@@ -32,5 +34,20 @@ describe("production artifacts", () => {
     }
 
     expect(existsSync(path.join(repoRoot, "public", "icons", "apple-touch-icon.png"))).toBe(true)
+  })
+
+  it("does not ship local deployment noise as public assets", () => {
+    const forbiddenPaths = [
+      "Capture.PNG",
+      "mobile.PNG",
+      path.join("public", ".htaccess"),
+      path.join("public", "index.php"),
+      path.join("public", "favicon.ico"),
+      path.join("supabase", ".temp", "project-ref"),
+    ]
+
+    for (const forbiddenPath of forbiddenPaths) {
+      expect(existsSync(path.join(repoRoot, forbiddenPath))).toBe(false)
+    }
   })
 })
