@@ -11,7 +11,7 @@ iNeedSocial adalah aplikasi web React + TypeScript + Vite yang mensimulasikan fe
 | Styling | Tailwind CSS v3 |
 | Ikon | Lucide React |
 | Build tool | Vite 6 |
-| Data | Feed JSON lokal + penyimpanan sesi opsional ke Supabase |
+| Data | Feed JSON lokal + media video Appwrite Storage + penyimpanan sesi opsional ke Supabase |
 
 ## Kebutuhan
 
@@ -196,6 +196,8 @@ public/
 scripts/
   export-all-sessions.mjs
 ```
+
+Media video saat ini dipetakan dari `public/content/videos/*` ke Appwrite Storage melalui konfigurasi env frontend. Cloudflare Stream tetap dipertahankan sebagai fallback legacy untuk post yang membawa `streamUid`, tetapi bukan jalur utama.
 
 ## Catatan
 
