@@ -296,6 +296,56 @@ test("mobile feed scrolls the document so browser chrome can collapse", async ({
     .toBe(0)
 })
 
+test("mobile tutorial overlay locks document scrolling until dismissed", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await startStudy(page)
+  await page.waitForFunction(() =>
+    Boolean(
+      document.querySelector(
+        '[data-testid="tutorial-delay-blocker"], [data-testid="tutorial-next-button"]'
+      )
+    )
+  )
+  await waitForVisibleFeedPost(page)
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        bodyPosition: document.body.style.position,
+        documentOverflow: document.documentElement.style.overflow,
+        scrollY: window.scrollY,
+      }))
+    )
+    .toEqual({
+      bodyPosition: "fixed",
+      documentOverflow: "hidden",
+      scrollY: 0,
+    })
+
+  await page.mouse.wheel(0, 1_200)
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), {
+      message: "Expected tutorial overlay to lock mobile document scroll",
+    })
+    .toBe(0)
+
+  await page.getByTestId("tutorial-skip-button").waitFor({ state: "visible" })
+  await page.getByTestId("tutorial-skip-button").click()
+  await page.waitForFunction(() => !document.querySelector('[data-testid="tutorial-skip-button"]'))
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        bodyPosition: document.body.style.position,
+        documentOverflow: document.documentElement.style.overflow,
+      }))
+    )
+    .toEqual({
+      bodyPosition: "",
+      documentOverflow: "",
+    })
+})
+
 test("tutorial overlay blocks feed interactions until dismissed", async ({ page }) => {
   await delayFeedResponses(page, 500)
   await startStudy(page)

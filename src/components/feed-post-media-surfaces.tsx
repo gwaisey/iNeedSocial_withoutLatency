@@ -4,7 +4,6 @@ import type { FeedMediaItem } from "./feed-post-media-types"
 import type { MediaSurfaceTokens } from "./feed-post-media-utils"
 import { ProgressiveImage } from "./progressive-image"
 
-const VIDEO_PLACEHOLDER_CLASS = "bg-black"
 const VIDEO_SKELETON_CLASS = "video-skeleton"
 
 export function FeedVideoSurface({
@@ -19,6 +18,7 @@ export function FeedVideoSurface({
   shellClassName,
   streamUid,
   streamDelivery,
+  tokens,
 }: {
   readonly canPrewarm?: boolean
   readonly className: string
@@ -31,6 +31,7 @@ export function FeedVideoSurface({
   readonly shellClassName?: string
   readonly streamDelivery?: FeedMediaItem["streamDelivery"]
   readonly streamUid?: string
+  readonly tokens: MediaSurfaceTokens
 }) {
   return (
     <AutoPlayVideo
@@ -40,11 +41,11 @@ export function FeedVideoSurface({
       isMuted={isMuted}
       onLoadedMetadata={onLoadedMetadata}
       onPosterLoad={onPosterLoad}
-      placeholderClassName={VIDEO_PLACEHOLDER_CLASS}
+      placeholderClassName={tokens.placeholder}
       poster={media?.poster}
       scrollRootRef={scrollRootRef}
       shellClassName={shellClassName}
-      skeletonClassName={VIDEO_SKELETON_CLASS}
+      skeletonClassName={`${VIDEO_SKELETON_CLASS} ${tokens.skeletonTone}`}
       src={media?.src}
       streamDelivery={streamDelivery ?? media?.streamDelivery}
       streamUid={streamUid ?? media?.streamUid}

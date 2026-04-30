@@ -19,6 +19,7 @@ export function FeedPostVideoMedia({
         media={primaryMedia}
         scrollRootRef={scrollRootRef}
         shellClassName="w-full"
+        tokens={tokens}
       />
       <MediaMuteButton isMuted={isMuted} onClick={onToggleMute} postId={post.id} />
     </div>

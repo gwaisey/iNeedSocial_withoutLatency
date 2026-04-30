@@ -6,7 +6,11 @@ import {
   type RefObject,
   type SyntheticEvent,
 } from "react"
-import { getResolvedVideoSource, getVideoPosterSource } from "./auto-play-video-config"
+import {
+  getResolvedVideoSource,
+  getVideoPosterSource,
+  VIDEO_POSTER_HANDOFF_MS,
+} from "./auto-play-video-config"
 import {
   useVideoCandidateLifecycle,
   useVideoPrewarmMount,
@@ -68,6 +72,7 @@ export function AutoPlayVideo({
   const lastReportedPlayIssueRef = useRef<string | null>(null)
   const [autoPreloadRank, setAutoPreloadRank] = useState<number | null>(null)
   const [isPlaybackOwner, setIsPlaybackOwner] = useState(false)
+  const [shouldShowPosterLayer, setShouldShowPosterLayer] = useState(Boolean(resolvedPoster))
   const [shouldMountVideo, setShouldMountVideo] = useState(false)
   const {
     distanceToViewport,
@@ -180,6 +185,26 @@ export function AutoPlayVideo({
     videoRef,
   })
 
+  useEffect(() => {
+    if (!resolvedPoster) {
+      setShouldShowPosterLayer(false)
+      return
+    }
+
+    if (!hasLoadedFrame) {
+      setShouldShowPosterLayer(true)
+      return
+    }
+
+    const hidePosterTimeout = window.setTimeout(() => {
+      setShouldShowPosterLayer(false)
+    }, VIDEO_POSTER_HANDOFF_MS)
+
+    return () => {
+      window.clearTimeout(hidePosterTimeout)
+    }
+  }, [hasLoadedFrame, resolvedPoster])
+
   return (
     <div
       ref={shellRef}
@@ -191,11 +216,13 @@ export function AutoPlayVideo({
           className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`}
         />
       )}
-      {resolvedPoster && !hasLoadedFrame && (
+      {resolvedPoster && shouldShowPosterLayer && (
         <img
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+            hasLoadedFrame ? "opacity-0" : "opacity-100"
+          }`}
           decoding="async"
           onLoad={(event) => {
             handlePosterLoad(event.currentTarget)
@@ -208,7 +235,7 @@ export function AutoPlayVideo({
         <video
           ref={videoRef}
           autoPlay={shouldAutoplayVisibleVideo}
-          className={`${className} absolute inset-0 h-full w-full object-cover ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
+          className={`${className} absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${hasLoadedFrame ? "opacity-100" : "opacity-0"}`}
           loop
           muted={isMuted}
           onLoadedData={handleLoadedData}

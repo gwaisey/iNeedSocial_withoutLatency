@@ -111,6 +111,7 @@ export function FeedPostCarouselMedia({
               }}
               scrollRootRef={scrollRootRef}
               shellClassName="w-full shrink-0"
+              tokens={tokens}
             />
           ) : (
             <FeedImageSurface
