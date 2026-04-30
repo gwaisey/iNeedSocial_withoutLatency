@@ -93,6 +93,9 @@ describe("AutoPlayVideo", () => {
 
     intersectionObserverInstances.length = 0
     window.IntersectionObserver = MockIntersectionObserver
+    vi.stubEnv("VITE_APPWRITE_ENDPOINT", "https://sgp.cloud.appwrite.io/v1")
+    vi.stubEnv("VITE_APPWRITE_PROJECT_ID", "69f22cb20001f8be28b3")
+    vi.stubEnv("VITE_APPWRITE_BUCKET_ID", "69f2b4dd002f17ed5c64")
     HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
     HTMLMediaElement.prototype.pause = vi.fn()
     HTMLMediaElement.prototype.load = vi.fn()
@@ -169,7 +172,7 @@ describe("AutoPlayVideo", () => {
         className="video"
         isMuted={true}
         poster="/poster.jpg"
-        src="/content/videos/pinata.mp4"
+        src="/content/videos-default/pinata.mp4"
       />
     )
 
@@ -196,7 +199,7 @@ describe("AutoPlayVideo", () => {
     Reflect.set(HTMLVideoElement.prototype, "cancelVideoFrameCallback", vi.fn())
 
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/pinata.mp4" />
     )
 
     await waitFor(() => {
@@ -235,7 +238,7 @@ describe("AutoPlayVideo", () => {
     Reflect.set(HTMLVideoElement.prototype, "cancelVideoFrameCallback", vi.fn())
 
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/pinata.mp4" />
     )
 
     await waitFor(() => {
@@ -271,7 +274,7 @@ describe("AutoPlayVideo", () => {
     Reflect.deleteProperty(HTMLVideoElement.prototype, "cancelVideoFrameCallback")
 
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/pinata.mp4" />
     )
 
     await waitFor(() => {
@@ -289,7 +292,7 @@ describe("AutoPlayVideo", () => {
 
   it("uses the poster-derived ratio immediately and keeps it stable after metadata loads", async () => {
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/captain-america.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/captain-america.mp4" />
     )
 
     await waitFor(() => {
@@ -324,7 +327,7 @@ describe("AutoPlayVideo", () => {
         className="video"
         isMuted={true}
         scrollRootRef={scrollRootRef}
-        src="/content/videos/pinata.mp4"
+        src="/content/videos-default/pinata.mp4"
       />
     )
 
@@ -389,7 +392,7 @@ describe("AutoPlayVideo", () => {
     const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 
     render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/pinata.mp4" />
     )
 
     await waitFor(() => {
@@ -459,7 +462,7 @@ describe("AutoPlayVideo", () => {
     globalThis.fetch = fetchSpy as typeof fetch
 
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/pinata.mp4" />
     )
 
     expect(
@@ -474,7 +477,7 @@ describe("AutoPlayVideo", () => {
     })
 
     const appwritePinataUrl =
-      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f06d7d001ead36760b/files/pinata/view?project=69f06d28001a59694572"
+      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f2b4dd002f17ed5c64/files/pinata/view?project=69f22cb20001f8be28b3"
 
     await waitFor(() => {
       expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
@@ -510,11 +513,11 @@ describe("AutoPlayVideo", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {})
 
     const { container } = render(
-      <AutoPlayVideo className="video" isMuted={true} src="/content/videos/pinata.mp4" />
+      <AutoPlayVideo className="video" isMuted={true} src="/content/videos-default/pinata.mp4" />
     )
 
     const appwritePinataUrl =
-      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f06d7d001ead36760b/files/pinata/view?project=69f06d28001a59694572"
+      "https://sgp.cloud.appwrite.io/v1/storage/buckets/69f2b4dd002f17ed5c64/files/pinata/view?project=69f22cb20001f8be28b3"
 
     await waitFor(() => {
       expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)

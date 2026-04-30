@@ -71,8 +71,8 @@ Salin `.env.example` menjadi `.env` untuk pengembangan lokal. Untuk deployment p
 ```bash
 VITE_FEED_SOURCE=mock
 VITE_APPWRITE_ENDPOINT=https://sgp.cloud.appwrite.io/v1
-VITE_APPWRITE_PROJECT_ID=69f06d28001a59694572
-VITE_APPWRITE_BUCKET_ID=69f06d7d001ead36760b
+VITE_APPWRITE_PROJECT_ID=69f22cb20001f8be28b3
+VITE_APPWRITE_BUCKET_ID=69f2b4dd002f17ed5c64
 VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE=
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
@@ -85,7 +85,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 
 Jika `VITE_FEED_SOURCE` kosong atau tidak valid, aplikasi otomatis kembali ke `mock`. Route `/api/feed` tidak disediakan di repo ini, sehingga mode `api` tetap membutuhkan backend eksternal.
 
-`VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, dan `VITE_APPWRITE_BUCKET_ID` mengarahkan video feed ke Appwrite Storage. Nilai bawaan sudah sesuai dengan storage publik proyek saat ini, tetapi tetap didokumentasikan agar konfigurasi produksi eksplisit.
+`VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, dan `VITE_APPWRITE_BUCKET_ID` mengarahkan video feed ke Appwrite Storage. Repo ini sudah punya default bawaan di kode, jadi env hanya diperlukan kalau Anda ingin override konfigurasi itu di deployment tertentu.
 
 `VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE` bersifat opsional dan hanya dipertahankan sebagai fallback legacy untuk media yang memiliki `streamUid`. Jika video Appwrite tersedia, aplikasi akan memprioritaskan sumber MP4 langsung dari Appwrite.
 
@@ -197,7 +197,7 @@ scripts/
   export-all-sessions.mjs
 ```
 
-Media video saat ini dipetakan dari `public/content/videos/*` ke Appwrite Storage melalui konfigurasi env frontend. Cloudflare Stream tetap dipertahankan sebagai fallback legacy untuk post yang membawa `streamUid`, tetapi bukan jalur utama.
+Media video saat ini dipetakan dari `public/content/videos-default/*` ke Appwrite Storage melalui konfigurasi env frontend. Cloudflare Stream tetap dipertahankan sebagai fallback legacy untuk post yang membawa `streamUid`, tetapi bukan jalur utama.
 
 ## Catatan
 

@@ -85,7 +85,7 @@ describe("feed-service helpers", () => {
             username: "uji",
             likes: "10",
             caption: "uji",
-            media: [{ src: "/content/videos/sample.mp4", alt: "uji" }],
+            media: [{ src: "/content/videos-default/sample.mp4", alt: "uji" }],
             genre: "humor",
           },
         ],
@@ -147,7 +147,7 @@ describe("feed-service helpers", () => {
             likes: "10",
             caption: "uji",
             media: [
-              { src: "/content/videos/sample.mp4", alt: "video" },
+              { src: "/content/videos-default/sample.mp4", alt: "video" },
               { src: "/content/files/sample.jpg", alt: "image" },
             ],
             genre: "humor",

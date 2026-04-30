@@ -22,9 +22,11 @@ export const VIDEO_VIEWPORT_INTERSECTION_THRESHOLDS = [
 ]
 
 const learnedVideoAspectRatios = new Map<string, string>()
-const DEFAULT_APPWRITE_BUCKET_ID = "69f06d7d001ead36760b"
+const DEFAULT_VIDEO_SOURCE_PREFIX = "/content/videos-default/"
+const LEGACY_VIDEO_SOURCE_PREFIX = "/content/videos/"
 const DEFAULT_APPWRITE_ENDPOINT = "https://sgp.cloud.appwrite.io/v1"
-const DEFAULT_APPWRITE_PROJECT_ID = "69f06d28001a59694572"
+const DEFAULT_APPWRITE_PROJECT_ID = "69f22cb20001f8be28b3"
+const DEFAULT_APPWRITE_BUCKET_ID = "69f2b4dd002f17ed5c64"
 
 function getCloudflareStreamCustomerCode() {
   const customerCode = import.meta.env.VITE_CLOUDFLARE_STREAM_CUSTOMER_CODE?.trim()
@@ -32,18 +34,18 @@ function getCloudflareStreamCustomerCode() {
 }
 
 function getAppwriteBucketId() {
-  const bucketId = import.meta.env.VITE_APPWRITE_BUCKET_ID?.trim()
-  return bucketId || DEFAULT_APPWRITE_BUCKET_ID
+  const bucketId = import.meta.env.VITE_APPWRITE_BUCKET_ID?.trim() ?? DEFAULT_APPWRITE_BUCKET_ID
+  return bucketId ? bucketId : undefined
 }
 
 function getAppwriteEndpoint() {
-  const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT?.trim()
-  return (endpoint || DEFAULT_APPWRITE_ENDPOINT).replace(/\/$/, "")
+  const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT?.trim() ?? DEFAULT_APPWRITE_ENDPOINT
+  return endpoint ? endpoint.replace(/\/$/, "") : undefined
 }
 
 function getAppwriteProjectId() {
-  const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID?.trim()
-  return projectId || DEFAULT_APPWRITE_PROJECT_ID
+  const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID?.trim() ?? DEFAULT_APPWRITE_PROJECT_ID
+  return projectId ? projectId : undefined
 }
 
 function buildAspectRatio(width: number, height: number) {
@@ -54,8 +56,25 @@ function buildAspectRatio(width: number, height: number) {
   return `${width} / ${height}`
 }
 
+function normalizeLocalVideoSource(src?: string) {
+  const normalizedSrc = src?.trim()
+  if (!normalizedSrc) {
+    return undefined
+  }
+
+  if (normalizedSrc.startsWith(DEFAULT_VIDEO_SOURCE_PREFIX)) {
+    return normalizedSrc
+  }
+
+  if (normalizedSrc.startsWith(LEGACY_VIDEO_SOURCE_PREFIX)) {
+    return normalizedSrc.replace(LEGACY_VIDEO_SOURCE_PREFIX, DEFAULT_VIDEO_SOURCE_PREFIX)
+  }
+
+  return normalizedSrc
+}
+
 export function getNormalizedVideoSource(src?: string) {
-  let normalizedSrc = src?.trim()
+  let normalizedSrc = normalizeLocalVideoSource(src)
 
   const appwriteSrc = getAppwriteVideoSource(normalizedSrc)
   if (appwriteSrc) {
@@ -66,16 +85,28 @@ export function getNormalizedVideoSource(src?: string) {
 }
 
 export function getAppwriteStorageOrigin() {
+  const endpoint = getAppwriteEndpoint()
+  if (!endpoint) {
+    return undefined
+  }
+
   try {
-    return new URL(getAppwriteEndpoint()).origin
+    return new URL(endpoint).origin
   } catch {
     return undefined
   }
 }
 
 export function getAppwriteVideoSource(src?: string) {
-  const normalizedSrc = src?.trim()
-  if (!normalizedSrc?.startsWith("/content/videos/")) {
+  const normalizedSrc = normalizeLocalVideoSource(src)
+  if (!normalizedSrc?.startsWith(DEFAULT_VIDEO_SOURCE_PREFIX)) {
+    return undefined
+  }
+
+  const endpoint = getAppwriteEndpoint()
+  const bucketId = getAppwriteBucketId()
+  const projectId = getAppwriteProjectId()
+  if (!endpoint || !bucketId || !projectId) {
     return undefined
   }
 
@@ -85,9 +116,7 @@ export function getAppwriteVideoSource(src?: string) {
     return undefined
   }
 
-  return `${getAppwriteEndpoint()}/storage/buckets/${getAppwriteBucketId()}/files/${encodeURIComponent(
-    fileId
-  )}/view?project=${encodeURIComponent(getAppwriteProjectId())}`
+  return `${endpoint}/storage/buckets/${bucketId}/files/${encodeURIComponent(fileId)}/view?project=${encodeURIComponent(projectId)}`
 }
 
 export function isAppwriteStorageViewSource(src?: string) {
@@ -103,11 +132,12 @@ export function isHlsManifestSource(src?: string) {
 }
 
 function getLocalVideoPosterSource(src?: string) {
-  if (!src?.includes("/content/videos/") || !isDirectVideoFileSource(src)) {
+  const normalizedSrc = normalizeLocalVideoSource(src)
+  if (!normalizedSrc?.includes(DEFAULT_VIDEO_SOURCE_PREFIX) || !isDirectVideoFileSource(normalizedSrc)) {
     return undefined
   }
 
-  return src.replace("/content/videos/", "/content/video-posters/").replace(/\.mp4$/, ".jpg")
+  return normalizedSrc.replace(DEFAULT_VIDEO_SOURCE_PREFIX, "/content/video-posters/").replace(/\.mp4$/, ".jpg")
 }
 
 export function getCloudflareStreamManifestUrl(
