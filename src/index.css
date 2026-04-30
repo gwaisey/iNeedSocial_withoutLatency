@@ -233,5 +233,7 @@ img {
 }
 
 .video-skeleton {
+  animation: none;
+  background: transparent;
   border-radius: 0;
 }

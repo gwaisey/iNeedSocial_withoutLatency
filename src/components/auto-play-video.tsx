@@ -211,7 +211,7 @@ export function AutoPlayVideo({
       className={`relative w-full overflow-hidden ${placeholderClassName} ${shellClassName}`}
       style={{ aspectRatio: shellAspectRatio }}
     >
-      {!hasLoadedFrame && (
+      {!resolvedPoster && !hasLoadedFrame && (
         <div
           className={`absolute inset-0 skeleton ${skeletonClassName} ${placeholderClassName}`}
         />
