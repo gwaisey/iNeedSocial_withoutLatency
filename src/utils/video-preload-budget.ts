@@ -13,6 +13,8 @@ type VideoPreloadCandidate = {
 const MAX_AUTO_PRELOAD_VIDEOS = 4
 const MAX_BELOW_PRELOAD_DISTANCE_PX = 12000
 const MAX_ABOVE_PRELOAD_DISTANCE_PX = 12000
+// Keep one nearby opposite-direction video warm so reversing scroll does not start cold.
+const OPPOSITE_DIRECTION_WARM_SLOT_INDEX = 2
 const registry = new Map<string, VideoPreloadCandidate>()
 let preferredPreloadDirection: Exclude<VideoPreloadDirection, "visible"> = "below"
 
@@ -37,6 +39,48 @@ function getEligibleCandidates({
     })
 }
 
+function pickPreloadCandidates(
+  preferredCandidates: Array<[string, VideoPreloadCandidate]>,
+  fallbackCandidates: Array<[string, VideoPreloadCandidate]>
+) {
+  const selectedCandidates: Array<[string, VideoPreloadCandidate]> = []
+
+  const addPreferredCandidate = () => {
+    const nextPreferredCandidate = preferredCandidates.shift()
+    if (nextPreferredCandidate) {
+      selectedCandidates.push(nextPreferredCandidate)
+    }
+  }
+
+  while (
+    selectedCandidates.length < MAX_AUTO_PRELOAD_VIDEOS &&
+    (preferredCandidates.length > 0 || fallbackCandidates.length > 0)
+  ) {
+    if (
+      selectedCandidates.length === OPPOSITE_DIRECTION_WARM_SLOT_INDEX &&
+      fallbackCandidates.length > 0
+    ) {
+      const fallbackCandidate = fallbackCandidates.shift()
+      if (fallbackCandidate) {
+        selectedCandidates.push(fallbackCandidate)
+      }
+      continue
+    }
+
+    if (preferredCandidates.length > 0) {
+      addPreferredCandidate()
+      continue
+    }
+
+    const fallbackCandidate = fallbackCandidates.shift()
+    if (fallbackCandidate) {
+      selectedCandidates.push(fallbackCandidate)
+    }
+  }
+
+  return selectedCandidates
+}
+
 function recomputeBudget() {
   const preferredCandidates = getEligibleCandidates({
     direction: preferredPreloadDirection,
@@ -53,8 +97,7 @@ function recomputeBudget() {
   })
 
   const preloadRanks = new Map<string, number>(
-    (preferredCandidates.length > 0 ? preferredCandidates : fallbackCandidates)
-      .slice(0, MAX_AUTO_PRELOAD_VIDEOS)
+    pickPreloadCandidates(preferredCandidates, fallbackCandidates)
       .map(([candidateId], index) => [candidateId, index])
   )
 

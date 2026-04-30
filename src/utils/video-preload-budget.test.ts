@@ -8,7 +8,7 @@ import {
 } from "./video-preload-budget"
 
 describe("video preload budget", () => {
-  it("preloads only the nearest downward videos while scrolling down", () => {
+  it("preloads nearby downward videos while keeping one reverse-scroll video warm", () => {
     resetVideoPreloadBudgetForTests()
 
     const notifications = new Map<string, number | null>()
@@ -59,18 +59,18 @@ describe("video preload budget", () => {
 
     expect(notifications.get("video-a")).toBeNull()
     expect(notifications.get("video-b")).toBe(0)
-    expect(notifications.get("video-c")).toBeNull()
+    expect(notifications.get("video-c")).toBe(2)
     expect(notifications.get("video-d")).toBe(1)
-    expect(notifications.get("video-e")).toBe(2)
-    expect(notifications.get("video-f")).toBe(3)
+    expect(notifications.get("video-e")).toBe(3)
+    expect(notifications.get("video-f")).toBeNull()
 
     unregisterVideoPreloadCandidate("video-a")
 
     expect(notifications.get("video-b")).toBe(0)
-    expect(notifications.get("video-c")).toBeNull()
+    expect(notifications.get("video-c")).toBe(2)
     expect(notifications.get("video-d")).toBe(1)
-    expect(notifications.get("video-e")).toBe(2)
-    expect(notifications.get("video-f")).toBe(3)
+    expect(notifications.get("video-e")).toBe(3)
+    expect(notifications.get("video-f")).toBeNull()
   })
 
   it("preloads above-viewport candidates first while scrolling up", () => {
@@ -112,10 +112,10 @@ describe("video preload budget", () => {
 
     setVideoPreloadScrollDirection("up")
 
-    expect(notifications.get("below-nearby")).toBeNull()
+    expect(notifications.get("below-nearby")).toBe(2)
     expect(notifications.get("above-nearby")).toBe(0)
     expect(notifications.get("above-secondary")).toBe(1)
-    expect(notifications.get("above-far")).toBe(2)
+    expect(notifications.get("above-far")).toBe(3)
   })
 
   it("does not count visible candidates toward the forward preload budget", () => {
@@ -191,9 +191,9 @@ describe("video preload budget", () => {
     expect(notifications.get("visible-d")).toBeNull()
     expect(notifications.get("up-next-a")).toBe(0)
     expect(notifications.get("up-next-b")).toBe(1)
-    expect(notifications.get("up-next-c")).toBe(2)
-    expect(notifications.get("up-next-d")).toBe(3)
-    expect(notifications.get("above-nearby")).toBeNull()
+    expect(notifications.get("up-next-c")).toBe(3)
+    expect(notifications.get("up-next-d")).toBeNull()
+    expect(notifications.get("above-nearby")).toBe(2)
   })
 
   it("still allows above-viewport preloads when there are no forward candidates", () => {

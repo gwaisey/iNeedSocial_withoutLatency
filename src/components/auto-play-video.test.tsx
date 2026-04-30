@@ -470,7 +470,6 @@ describe("AutoPlayVideo", () => {
     ).not.toBeNull()
 
     expect(document.head.querySelector('link[rel="preload"][as="video"]')).toBeNull()
-    expect(fetchSpy).not.toHaveBeenCalled()
 
     await waitFor(() => {
       expect(container.querySelector("video")).not.toBeNull()
@@ -482,6 +481,8 @@ describe("AutoPlayVideo", () => {
     await waitFor(() => {
       expect(container.querySelector("video")?.getAttribute("src")).toBe(appwritePinataUrl)
     })
+
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it("keeps nearby offscreen sources attached and unloads them after they are far away", async () => {
