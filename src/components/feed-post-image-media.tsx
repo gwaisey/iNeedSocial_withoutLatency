@@ -1,7 +1,7 @@
 import type { FeedPostImageMediaProps } from "./feed-post-media-types"
 import { FeedImageSurface } from "./feed-post-media-surfaces"
 
-export function FeedPostImageMedia({ post, tokens }: FeedPostImageMediaProps) {
+export function FeedPostImageMedia({ mediaPriority, post, tokens }: FeedPostImageMediaProps) {
   const primaryMedia = post.media[0]
 
   return (
@@ -9,7 +9,7 @@ export function FeedPostImageMedia({ post, tokens }: FeedPostImageMediaProps) {
       <FeedImageSurface
         className="w-full h-auto"
         media={primaryMedia}
-        priority="high"
+        priority={mediaPriority}
         shellClassName="w-full"
         tokens={tokens}
       />

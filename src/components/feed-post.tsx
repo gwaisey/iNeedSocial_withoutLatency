@@ -6,6 +6,7 @@ import {
   FeedPostHeader,
 } from "./feed-post-chrome"
 import { FeedPostMedia } from "./feed-post-media"
+import type { FeedMediaPriority } from "./feed-post-media-types"
 import { getFeedPostPalette } from "./feed-post-utils"
 
 type FeedPostProps = {
@@ -13,6 +14,7 @@ type FeedPostProps = {
   readonly isLiked: boolean
   readonly isReposted: boolean
   readonly isVideoMuted: boolean
+  readonly mediaPriority: FeedMediaPriority
   readonly onComment: () => void
   readonly onLike: () => void
   readonly onRepost: () => void
@@ -26,6 +28,7 @@ export function FeedPost({
   isLiked,
   isReposted,
   isVideoMuted,
+  mediaPriority,
   onComment,
   onLike,
   onRepost,
@@ -41,6 +44,7 @@ export function FeedPost({
       <FeedPostMedia
         isDark={isDark}
         isMuted={isVideoMuted}
+        mediaPriority={mediaPriority}
         onToggleMute={onToggleVideoMute}
         post={post}
         scrollRootRef={scrollRootRef}

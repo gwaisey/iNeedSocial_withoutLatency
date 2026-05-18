@@ -110,6 +110,7 @@ function FeedPostList({
               isDark={isDark}
               isLiked={Boolean(likedPosts[post.id])}
               isReposted={Boolean(repostedPosts[post.id])}
+              mediaPriority={index < 3 ? "high" : "low"}
               isVideoMuted={isVideoMutedByDefault}
               onComment={() => onComment(post.id)}
               onLike={() => onLike(post.id)}

@@ -18,6 +18,7 @@ import {
 
 export function FeedPostCarouselMedia({
   isMuted,
+  mediaPriority,
   onToggleMute,
   post,
   scrollRootRef,
@@ -121,7 +122,7 @@ export function FeedPostCarouselMedia({
               onLoad={(image) => {
                 updateSlideHeight(index, buildImageAspectRatioHeight(image))
               }}
-              priority={Math.abs(index - activeIdx) <= 2 ? "high" : "low"}
+              priority={index === activeIdx ? mediaPriority : "low"}
               shellClassName="w-full shrink-0"
               tokens={tokens}
             />

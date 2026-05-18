@@ -50,6 +50,12 @@ Menjalankan pengujian unit dan komponen:
 npm run test
 ```
 
+Audit integritas konten feed dan aset media:
+
+```bash
+npm run audit:feed-content
+```
+
 Menjalankan smoke test browser:
 
 ```bash
@@ -203,6 +209,7 @@ public/
   manifest.json
   sw.js
 scripts/
+  audit-feed-content.mjs
   export-all-sessions.mjs
   verify-session-export.mjs
 ```
@@ -242,6 +249,7 @@ Jalankan urutan berikut untuk signoff:
 ```bash
 npm run lint
 npm run test
+npm run audit:feed-content
 npm run build
 npm run test:e2e
 npm run test:e2e:preview
@@ -264,6 +272,7 @@ npm run test:e2e:production
 Kriteria lulus:
 
 - semua perintah di atas sukses tanpa error,
+- `audit:feed-content` tidak menemukan issue blocking pada feed, aset lokal, varian compact video, dan poster video,
 - `test:e2e:preview` tidak menemukan console `error`,
 - untuk sesi disposable desktop dan mobile, hanya satu video aktif yang memegang playback pada saat scroll cepat,
 - output `VERIFY_SESSION_EXPORT_RESULT` bernilai `"passed": true`,

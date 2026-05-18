@@ -8,6 +8,7 @@ import { FeedPostVideoMedia } from "./feed-post-video-media"
 type FeedPostMediaProps = {
   readonly isDark: boolean
   readonly isMuted: boolean
+  readonly mediaPriority: "high" | "low"
   readonly onToggleMute: () => void
   readonly post: Post
   readonly scrollRootRef?: RefObject<HTMLElement | null>
@@ -16,6 +17,7 @@ type FeedPostMediaProps = {
 export function FeedPostMedia({
   isDark,
   isMuted,
+  mediaPriority,
   onToggleMute,
   post,
   scrollRootRef,
@@ -27,6 +29,7 @@ export function FeedPostMedia({
       return (
         <FeedPostVideoMedia
           isMuted={isMuted}
+          mediaPriority={mediaPriority}
           onToggleMute={onToggleMute}
           post={post}
           scrollRootRef={scrollRootRef}
@@ -37,6 +40,7 @@ export function FeedPostMedia({
       return (
         <FeedPostCarouselMedia
           isMuted={isMuted}
+          mediaPriority={mediaPriority}
           onToggleMute={onToggleMute}
           post={post}
           scrollRootRef={scrollRootRef}
@@ -45,6 +49,6 @@ export function FeedPostMedia({
       )
     case "image":
     default:
-      return <FeedPostImageMedia post={post} tokens={tokens} />
+      return <FeedPostImageMedia mediaPriority={mediaPriority} post={post} tokens={tokens} />
   }
 }

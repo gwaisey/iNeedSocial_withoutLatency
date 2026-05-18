@@ -49,7 +49,7 @@ export function FeedImageSurface({
   className,
   media,
   onLoad,
-  priority = "high",
+  priority = "low",
   shellClassName,
   tokens,
 }: {

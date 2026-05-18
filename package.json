@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "audit:feed-content": "node ./scripts/audit-feed-content.mjs",
     "export:all-sessions": "node ./scripts/export-all-sessions.mjs",
     "verify:session-export": "node ./scripts/verify-session-export.mjs",
     "generate:image-dimensions": "node ./scripts/generate-image-dimensions.mjs",
