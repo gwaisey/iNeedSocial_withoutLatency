@@ -262,6 +262,14 @@ Setelah perubahan sudah ter-deploy ke URL production, jalankan juga:
 npm run test:e2e:production
 ```
 
+Untuk menguji deployment Vercel spesifik, override target:
+
+```bash
+E2E_BASE_URL=https://deployment-url.vercel.app npm run test:e2e:production
+```
+
+Jika deployment tersebut memakai Vercel Deployment Protection, isi `VERCEL_AUTOMATION_BYPASS_SECRET` agar Playwright bisa mengirim header bypass automation sebelum memulai sesi.
+
 `verify:session-export` akan:
 
 - menjalankan dua sesi disposable nyata lewat browser preview (desktop + mobile),

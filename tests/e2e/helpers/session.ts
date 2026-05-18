@@ -70,8 +70,27 @@ export async function seedCompletedTutorialSession(page: Page, sessionId: string
 }
 
 export async function startStudy(page: Page) {
+  const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
+  if (vercelBypassSecret) {
+    await page.setExtraHTTPHeaders({
+      "x-vercel-protection-bypass": vercelBypassSecret,
+      "x-vercel-set-bypass-cookie": "true",
+    })
+  }
+
   await page.goto("/")
-  await page.waitForURL("**/welcome")
+
+  if (vercelBypassSecret) {
+    await page.setExtraHTTPHeaders({})
+  }
+
+  if (page.url().startsWith("https://vercel.com/login")) {
+    throw new Error(
+      "The E2E base URL is protected by Vercel Deployment Protection. Use a public production alias or set VERCEL_AUTOMATION_BYPASS_SECRET for protected deployment validation."
+    )
+  }
+
+  await page.waitForURL("**/welcome", { timeout: 15_000 })
   await page.getByTestId("start-study-button").click()
-  await page.waitForURL("**/feed?theme=light")
+  await page.waitForURL("**/feed?theme=light", { timeout: 15_000 })
 }
